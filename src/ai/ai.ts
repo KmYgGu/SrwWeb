@@ -248,10 +248,13 @@ export function search(ctx: Ctx, S: GameState): Plan {
   let best: Plan = { value: -Infinity, move: null, weapon: null };
   const attacks: AttackCand[] = [];
 
-  for (const [k, node] of reach) {
+  for (const k of reach.keys()) {
     const pos = keyPos(k);
-    const moved = !samePos(pos, me.pos);
-    const leftover = S.turn.mpLeft - node.cost;
+    // needsMove: 지금 칸에서 옮겨야 하는가. away: 이번 행동의 시작 칸을 벗어났는가(P무기·히트&어웨이 판정)
+    const needsMove = !samePos(pos, me.pos);
+    const away = !samePos(pos, S.turn.startPos);
+    // 히트&어웨이는 제자리에서 공격했을 때만 공격 뒤에 움직일 수 있다.
+    const leftover = away ? 0 : S.turn.moveBudget;
     const fm: Fighter = { ...fm0, pos };
     const riskNow = postRisk(ctx, S, fm, fo, acted ? 0 : leftover);
 
@@ -259,12 +262,12 @@ export function search(ctx: Ctx, S: GameState): Plan {
     const waited: Fighter = acted ? fm : { ...fm, en: Math.min(me.def.en, fm.en + RULES.waitEn) };
     const wv = staticEval(ctx.prof, waited, fo) - kappa * riskOf(ctx, waited, fo) + potential(ctx, waited, fo);
     ctx.trace?.push(`wait@(${pos.x},${pos.y}) v=${wv.toFixed(3)} risk=${riskOf(ctx, waited, fo).toFixed(3)}`);
-    if (wv > best.value) best = { value: wv, move: moved ? pos : null, weapon: null };
+    if (wv > best.value) best = { value: wv, move: needsMove ? pos : null, weapon: null };
 
     if (acted) continue;
     const d = dist(pos, foe.pos);
     me.def.weapons.forEach((w, wi) => {
-      if (!weaponReady(fm, wi, moved) || !inRange(fm, w, d)) return;
+      if (!weaponReady(fm, wi, away) || !inRange(fm, w, d)) return;
       let v = Infinity;
       for (const def of defenseOptions(fo, fm)) {
         let e = 0;
@@ -275,7 +278,7 @@ export function search(ctx: Ctx, S: GameState): Plan {
         if (e < v) v = e;
       }
       ctx.trace?.push(`atk@(${pos.x},${pos.y}) w${wi} coarse=${v.toFixed(3)} riskNow=${riskNow.toFixed(3)}`);
-      attacks.push({ pos, moved, wi, leftover, coarse: v });
+      attacks.push({ pos, moved: needsMove, wi, leftover, coarse: v });
     });
   }
 

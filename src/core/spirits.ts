@@ -70,7 +70,7 @@ export const EFFECTS: Handlers = {
   focus: { apply: (_e, c) => void (c.unit.buffs.focus = true) },
   pierce: { beforeActionOnly: true, apply: (_e, c) => void (c.unit.buffs.pierce = true) },
   move: {
-    apply: (e, c) => void (c.turn.mpLeft += e.bonus),
+    apply: (e, c) => void (c.turn.moveBudget += e.bonus),
     usable: (_e, c) => c.canMove,
   },
   heal: {
@@ -93,7 +93,13 @@ export const EFFECTS: Handlers = {
   },
   again: {
     apply: (_e, c) => {
-      Object.assign(c.turn, { movedBefore: false, acted: false, mpLeft: c.baseMove });
+      Object.assign(c.turn, {
+        startPos: { ...c.unit.pos },
+        acted: false,
+        attackedInPlace: false,
+        movedAfter: false,
+        moveBudget: c.baseMove,
+      });
     },
     usable: (_e, c) => c.turn.acted,
   },

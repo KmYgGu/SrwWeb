@@ -2,19 +2,26 @@
 import { ABILITIES } from '../core/abilities';
 import { chooseDefense, decide, PROFILES } from '../ai/ai';
 import type { DefenseChoice, StrikeEvent } from '../core/exchange';
-import { activeUnit, moveRange, perform } from '../core/game';
-import { pathTo } from '../core/map';
-import type { Action } from '../core/types';
+import { activeUnit, foeUnit, perform } from '../core/game';
+import { dist, pathTo, reachable } from '../core/map';
+import type { Action, Side } from '../core/types';
 import { popText } from './board';
 import { askDefense } from './sheets';
-import { FOE, ME, moveDuration, session, sleep } from './session';
+import { AIM_HOLD_MS, AIM_RESULT_MS, aimTravel, FOE, ME, moveDuration, session, sleep } from './session';
 
 const AI_PROFILE = PROFILES.balanced;
 
-function showEvents(events: StrikeEvent[], attacker: number) {
+/** 공방의 한 번 한 번마다 조준선이 날아가고, 도착해 멈춘 뒤에 결과가 뜬다. */
+async function showEvents(events: StrikeEvent[], attacker: Side) {
   const game = session.game;
   for (const ev of events) {
-    const target = game.units[ev.by === 0 ? 1 - attacker : attacker];
+    const strikerSide = (ev.by === 0 ? attacker : 1 - attacker) as Side;
+    const striker = game.units[strikerSide];
+    const target = game.units[1 - strikerSide];
+    const travel = aimTravel(dist(striker.pos, target.pos));
+    session.aim = { from: striker.pos, to: target.pos, side: strikerSide, t0: performance.now(), travel, hold: AIM_HOLD_MS };
+    await sleep(travel + AIM_HOLD_MS);
+    session.aim = null;
     const text =
       ev.result === 'hit'
         ? String(ev.dmg)
@@ -24,14 +31,20 @@ function showEvents(events: StrikeEvent[], attacker: number) {
             ? '섬광'
             : ABILITIES[ev.ability!].name;
     popText(target.pos.x, target.pos.y, text, ev.result === 'hit' ? '#ffd24a' : '#ffffff');
+    await sleep(AIM_RESULT_MS);
   }
 }
 
 async function exec(act: Action, defense?: DefenseChoice) {
-  // 이동 경로는 규칙이 위치를 바꾸기 전에 구해 둔다.
-  const side = activeUnit(session.game).side;
-  const path = act.type === 'move' ? pathTo(moveRange(session.game), act.to) : [];
-  const r = perform(session.game, act, defense);
+  const game = session.game;
+  // 이동 경로는 규칙이 위치를 바꾸기 전에, 지금 칸에서 목적지까지의 실제 길로 구해 둔다.
+  const unit = activeUnit(game);
+  const path =
+    act.type === 'move'
+      ? pathTo(reachable(game.grid, unit.def.moveClass, unit.pos, 99, foeUnit(game).pos), act.to)
+      : [];
+  const side = unit.side;
+  const r = perform(game, act, defense);
   if (!r.ok) {
     console.warn(r.error);
     return;
@@ -42,10 +55,7 @@ async function exec(act: Action, defense?: DefenseChoice) {
     await sleep(dur);
     session.anim = null;
   }
-  if (r.events.length) {
-    showEvents(r.events, r.attacker);
-    await sleep(900);
-  }
+  if (r.events.length) await showEvents(r.events, r.attacker);
 }
 
 async function runAi() {

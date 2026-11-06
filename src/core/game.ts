@@ -48,7 +48,7 @@ export function createGame(p0: RosterEntry, p1: RosterEntry, seed: number, mapId
     mapId: map.id,
     grid: buildGrid(map),
     units: [newUnit(0, p0, map.spawns[0]), newUnit(1, p1, map.spawns[1])],
-    turn: { side: 0, movedBefore: false, acted: false, mpLeft: 0 },
+    turn: { side: 0, startPos: { x: 0, y: 0 }, acted: false, attackedInPlace: false, movedAfter: false, moveBudget: 0 },
     round: 1,
     lastClash: 1,
     winner: null,
@@ -88,7 +88,14 @@ function beginTurn(s: GameState) {
   const start = turnStartOf(u.pilot);
   if (start.hpRatio > 0) u.hp = Math.min(u.def.hp, u.hp + Math.round(u.def.hp * start.hpRatio));
   if (start.en > 0) u.en = Math.min(u.def.en, u.en + start.en);
-  s.turn = { side: s.turn.side, movedBefore: false, acted: false, mpLeft: baseMove(u) };
+  s.turn = {
+    side: s.turn.side,
+    startPos: { ...u.pos },
+    acted: false,
+    attackedInPlace: false,
+    movedAfter: false,
+    moveBudget: baseMove(u),
+  };
 }
 
 function finish(s: GameState, winner: GameState['winner']) {
@@ -113,16 +120,23 @@ function endTurn(s: GameState) {
   beginTurn(s);
 }
 
+/** 이번 행동의 시작 칸에서 벗어나 있는가(P무기는 이때 쓸 수 없다) */
+export const hasMoved = (s: GameState): boolean => !samePos(activeUnit(s).pos, s.turn.startPos);
+
 export function canMove(s: GameState): boolean {
   const t = s.turn;
-  if (s.winner !== null || t.mpLeft <= 0) return false;
-  // 공격 전에는 남은 이동력 안에서 몇 번이든 옮길 수 있고, 공격 뒤에는 히트&어웨이일 때만 옮길 수 있다.
-  return !t.acted || movesAfterAttack(activeUnit(s).pilot);
+  if (s.winner !== null || t.moveBudget <= 0) return false;
+  // 공격 전에는 시작 칸의 이동 범위 안에서 몇 번이든 다시 고를 수 있다.
+  // 공격 뒤에는 히트&어웨이이면서 제자리에서 공격했을 때만, 한 번 움직일 수 있다.
+  if (!t.acted) return true;
+  return t.attackedInPlace && !t.movedAfter && movesAfterAttack(activeUnit(s).pilot);
 }
 
 export function moveRange(s: GameState): Map<number, ReachNode> {
   const u = activeUnit(s);
-  return reachable(s.grid, u.def.moveClass, u.pos, canMove(s) ? s.turn.mpLeft : 0, foeUnit(s).pos);
+  // 공격 전에는 시작 칸에서, 공격 뒤에는 지금 칸에서 잰다.
+  const anchor = s.turn.acted ? u.pos : s.turn.startPos;
+  return reachable(s.grid, u.def.moveClass, anchor, canMove(s) ? s.turn.moveBudget : 0, foeUnit(s).pos);
 }
 
 const effectCtx = (s: GameState, u: Unit): EffectCtx => ({
@@ -157,7 +171,7 @@ export function weaponStatus(s: GameState, unit: Unit, wi: number): 'ok' | 'en' 
   const w = unit.def.weapons[wi];
   if (f.en < w.enCost) return 'en';
   if (w.ammo !== null && (f.ammo[wi] ?? 0) <= 0) return 'ammo';
-  if (unit.side === s.turn.side && s.turn.movedBefore && w.isP) return 'p';
+  if (unit.side === s.turn.side && hasMoved(s) && w.isP) return 'p';
   const foe = s.units[1 - unit.side];
   return inRange(f, w, dist(unit.pos, foe.pos)) ? 'ok' : 'range';
 }
@@ -211,8 +225,7 @@ export function perform(s: GameState, action: Action, defense?: DefenseChoice): 
       const node = moveRange(s).get(tileKey(action.to.x, action.to.y));
       if (!node) return fail('갈 수 없는 칸');
       me.pos = { ...action.to };
-      t.mpLeft -= node.cost;
-      if (!t.acted) t.movedBefore = true;
+      if (t.acted) t.movedAfter = true;
       if (t.acted && !canMove(s) && !anyCastable(s)) endTurn(s);
       return done();
     }
@@ -223,7 +236,8 @@ export function perform(s: GameState, action: Action, defense?: DefenseChoice): 
       if (!w) return fail('없는 무기');
       const fa = fighterOf(me);
       const fd = fighterOf(foe);
-      if (!weaponReady(fa, wi, t.movedBefore)) return fail('쓸 수 없는 무기');
+      const moved = hasMoved(s);
+      if (!weaponReady(fa, wi, moved)) return fail('쓸 수 없는 무기');
       if (!inRange(fa, w, dist(me.pos, foe.pos))) return fail('사거리 밖');
       if (!defense) return fail('방어 선택이 필요하다');
       if (defense.kind === 'counter' && !counterWeapons(fd, fa).includes(defense.weapon)) {
@@ -234,6 +248,7 @@ export function perform(s: GameState, action: Action, defense?: DefenseChoice): 
       writeBack(foe, leaf.d);
       for (const ev of leaf.events) s.log.push(describe(ev, me, foe));
       t.acted = true;
+      t.attackedInPlace = !moved;
       me.lastWeapon = wi;
       if (defense.kind === 'counter' && leaf.events.some((ev) => ev.by === 1 && ev.tag === 'counter')) {
         foe.lastWeapon = defense.weapon;

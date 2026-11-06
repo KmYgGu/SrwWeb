@@ -133,10 +133,15 @@ export interface Unit {
 
 export interface TurnState {
   side: Side;
-  /** 이번 행동에서 공격 전에 이동했는가(P무기 판정) */
-  movedBefore: boolean;
+  /** 이번 행동을 시작한 칸. 공격 전의 이동은 몇 번을 옮기든 항상 이 칸에서 닿는 범위 안이면 된다 */
+  startPos: Pos;
   acted: boolean;
-  mpLeft: number;
+  /** 제자리(시작 칸)에서 공격했는가. 히트&어웨이는 이때만 공격 뒤에 움직일 수 있다 */
+  attackedInPlace: boolean;
+  /** 공격 뒤 이동을 이미 썼는가 */
+  movedAfter: boolean;
+  /** 이번 행동의 이동 범위(비용 합계 상한). 이동해도 줄지 않는다 */
+  moveBudget: number;
 }
 
 export interface GameState {
