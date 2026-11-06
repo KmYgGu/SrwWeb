@@ -13,11 +13,12 @@ import { activeSpiritLabels } from '../core/spirits';
 import type { Unit } from '../core/types';
 import { FOE, ME, session } from './session';
 import { addEffectsToggle, sheet, strikeText } from './sheets';
+import { showUnitInfo } from './unitInfo';
 import { figure, gauge, spiritChips } from './unitView';
 
 function unitCard(u: Unit, role: 'me' | 'foe'): string {
   const abilities = u.pilot.abilities.map((a) => ABILITIES[a].name).join(' · ');
-  const weapons = u.def.weapons.map((w) => `${w.name} ${w.minRange}-${w.maxRange}`).join(' · ');
+  const active = activeSpiritLabels(u);
   return `<div class="ucard ${role}">
     ${figure(u)}
     <b>${u.def.name} / ${u.pilot.name}</b>
@@ -26,11 +27,16 @@ function unitCard(u: Unit, role: 'me' | 'foe'): string {
     ${gauge('en', 'EN', u.en, u.def.en)}
     <small>기력 ${u.morale} · SP ${u.sp} · ${PERSONALITIES[u.pilot.personality].name}</small>
     <small>${abilities}</small>
-    ${role === 'foe' ? `<small>무기: ${weapons}</small>` : ''}
-    <small>발동 중인 정신</small>
-    <div class="chips">${spiritChips(activeSpiritLabels(u))}</div>
+    ${active.length > 0 ? '<small>발동 중인 정신</small>' : ''}
+    <div class="chips">${spiritChips(active)}</div>
     <div class="hit"></div>
   </div>`;
+}
+
+/** 유닛 그림을 누르면 그 유닛의 모든 정보를 위에 겹쳐 보여 준다. 닫으면 이 선택 화면으로 돌아온다. */
+function wireInfo(box: HTMLElement, me: Unit, foe: Unit) {
+  box.querySelector('.ucard.me .figure')!.addEventListener('click', () => void showUnitInfo(me));
+  box.querySelector('.ucard.foe .figure')!.addEventListener('click', () => void showUnitInfo(foe));
 }
 
 const duel = (me: Unit, foe: Unit) => `<div class="duel">${unitCard(me, 'me')}${unitCard(foe, 'foe')}</div>`;
@@ -98,6 +104,7 @@ export function chooseAttack(): Promise<number | null> {
     '공격 선택',
     (close, box) => {
       box.insertAdjacentHTML('beforeend', duel(me, foe));
+      wireInfo(box, me, foe);
       setCounterHit(box, 'foe', env, fo, fm);
       const rows: HTMLButtonElement[] = [];
       const list = document.createElement('div');
@@ -161,6 +168,7 @@ export async function askDefense(weapon: number): Promise<DefenseChoice> {
     `${atk.def.name}의 ${w.name} — 어떻게 받을까?`,
     (close, box) => {
       box.insertAdjacentHTML('beforeend', duel(me, atk));
+      wireInfo(box, me, atk);
       setOverkill(box, 'me', lethal);
       setHit(box, 'foe', w.name, pct(hitOf(env, fa, fd, weapon)));
       setCounterHit(box, 'me', env, fd, fa);

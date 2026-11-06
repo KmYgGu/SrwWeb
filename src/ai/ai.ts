@@ -347,7 +347,8 @@ export function search(ctx: Ctx, S: GameState): Plan {
     const riskNow = postRisk(ctx, S, fm, fo, acted ? 0 : leftover);
 
     // 공격하지 않고 마치는 계획
-    const waited: Fighter = acted ? fm : { ...fm, en: Math.min(me.def.en, fm.en + RULES.waitEn) };
+    // 시작한 칸에서 마치면 EN 이 조금 회복된다(게임 규칙과 같은 조건).
+    const waited: Fighter = away ? fm : { ...fm, en: Math.min(me.def.en, fm.en + RULES.restEn) };
     const wv = staticEval(ctx.prof, waited, fo) - kappa * riskOf(ctx, waited, fo) + potential(ctx, waited, fo);
     ctx.trace?.push(`wait@(${pos.x},${pos.y}) v=${wv.toFixed(3)} risk=${riskOf(ctx, waited, fo).toFixed(3)}`);
     if (wv > best.value) best = { value: wv, move: needsMove ? pos : null, weapon: null };

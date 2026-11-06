@@ -75,6 +75,31 @@ const longbow = ROSTER.find((r) => r.unit.id === 'longbow')!;
   assert.equal(activeUnit(s).en, before - 1, '평지 한 칸 = EN 1');
 }
 
+// 1-4. 제자리에서 턴을 마치면 EN 이 조금 회복되고, 움직였으면 회복되지 않는다.
+{
+  const rest = createGame(blazer, longbow, 1);
+  activeUnit(rest).en = 100;
+  assert.ok(perform(rest, { type: 'wait' }).ok);
+  assert.equal(rest.units[0].en, 100 + RULES.restEn, '제자리 대기');
+
+  const full = createGame(blazer, longbow, 1);
+  assert.ok(perform(full, { type: 'wait' }).ok);
+  assert.equal(full.units[0].en, full.units[0].def.en, '최대치를 넘지 않는다');
+
+  const moved = createGame(blazer, longbow, 1);
+  assert.ok(perform(moved, { type: 'move', to: { x: 3, y: 11 } }).ok);
+  const enMoved = moved.units[0].en;
+  assert.ok(perform(moved, { type: 'wait' }).ok);
+  assert.equal(moved.units[0].en, enMoved, '움직였으면 회복 없음');
+
+  const shot = createGame(blazer, longbow, 1);
+  shot.units[1].pos = { x: 4, y: 10 };
+  assert.ok(perform(shot, { type: 'attack', weapon: 1 }, { kind: 'guard' }).ok); // 하이퍼 소드 EN 6
+  const enShot = shot.units[0].en;
+  assert.ok(perform(shot, { type: 'wait' }).ok);
+  assert.equal(shot.units[0].en, enShot + RULES.restEn, '제자리에서 공격하고 마쳐도 회복');
+}
+
 // 2. P무기는 시작 칸을 벗어나 있을 때만 막힌다(제자리로 돌아오면 다시 쓸 수 있다).
 {
   const s = createGame(blazer, longbow, 1);

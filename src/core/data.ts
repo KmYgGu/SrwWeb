@@ -33,8 +33,8 @@ export const RULES = {
   mobilityWeight: 0.25,
   hitMin: 5,
   hitMax: 100,
-  /** 공격하지 않고 턴을 마치면 회복되는 EN */
-  waitEn: 12,
+  /** 시작한 칸에서 움직이지 않고 턴을 마치면 회복되는 EN(소량). 공격했는지는 따지지 않는다 */
+  restEn: 6,
   /** 공중 유닛이 한 칸 움직일 때 드는 EN. 지형과 상관없이 일정하다(대신 지형에 따른 이동력 감소가 없다) */
   airMoveEn: 2,
   turnLimit: 30,

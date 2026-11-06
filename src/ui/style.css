@@ -117,3 +117,7 @@ canvas { touch-action: manipulation; display: block; }
 
 /* 지금 자리에서 공격할 수 있을 때의 공격 버튼 */
 .cmds button.ready { background: #c2410c; border-color: #fb923c; color: #fff; font-weight: 700; }
+
+/* 선택 화면의 유닛 그림은 눌러서 모든 정보를 볼 수 있다 */
+.ucard .figure { cursor: pointer; }
+.ucard .figure::after { content: 'ⓘ 상세'; position: absolute; right: 6px; bottom: 6px; padding: 1px 6px; border-radius: 8px; background: rgba(5, 8, 16, 0.7); color: var(--dim); font-size: 10px; pointer-events: none; }

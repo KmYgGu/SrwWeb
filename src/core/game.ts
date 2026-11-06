@@ -108,7 +108,13 @@ function finish(s: GameState, winner: GameState['winner']) {
 
 function endTurn(s: GameState) {
   const u = activeUnit(s);
-  if (!s.turn.acted) u.en = Math.min(u.def.en, u.en + RULES.waitEn);
+  if (samePos(u.pos, s.turn.startPos)) {
+    const gain = Math.min(u.def.en - u.en, RULES.restEn);
+    if (gain > 0) {
+      u.en += gain;
+      s.log.push(`${u.def.name} 제자리 대기 (EN +${gain})`);
+    }
+  }
   const next = (1 - s.turn.side) as Side;
   if (next === 0) {
     s.round++;
