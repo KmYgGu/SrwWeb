@@ -1,6 +1,7 @@
 import { calcStrike, counterWeapons, fighterOf, type DefenseChoice } from '../core/exchange';
 import { activeUnit, castable, envOf, weaponStatus } from '../core/game';
 import { SPIRITS } from '../core/spirits';
+import { saveSettings, settings } from './settings';
 import type { SpiritId, Unit } from '../core/types';
 import { FOE, ME, session } from './session';
 
@@ -20,6 +21,29 @@ export function sheet<T>(title: string, build: (close: (v: T | null) => void, bo
     document.body.appendChild(el);
     build(close, el.querySelector('.body')!);
   });
+}
+
+/**
+ * 연출 켜기/끄기. 전투 연출(컷인 등)은 아직 없어서 어느 쪽을 골라도 꺼진 상태로 진행된다
+ * (실제로 쓸지는 settings.ts 의 effectsEnabled 가 정한다).
+ */
+function addEffectsToggle(box: HTMLElement) {
+  const wrap = document.createElement('div');
+  wrap.className = 'fx';
+  wrap.innerHTML = `<span>연출</span>
+    <div class="toggle"><button data-fx="on">켜기</button><button data-fx="off">끄기</button></div>
+    <p class="note">전투 연출(컷인 등)은 아직 준비 중이라 어느 쪽을 골라도 꺼진 상태로 진행됩니다.</p>`;
+  const paint = () =>
+    wrap.querySelectorAll<HTMLElement>('[data-fx]').forEach((b) => b.classList.toggle('sel', (b.dataset.fx === 'on') === settings.effects));
+  wrap.querySelectorAll<HTMLElement>('[data-fx]').forEach((b) =>
+    b.addEventListener('click', () => {
+      settings.effects = b.dataset.fx === 'on';
+      saveSettings();
+      paint();
+    }),
+  );
+  paint();
+  box.appendChild(wrap);
 }
 
 function strikeText(atk: Unit, def: Unit, wi: number, evade = false, guard = false): string {
@@ -48,6 +72,32 @@ export function pickWeapon(): Promise<number | null> {
       box.appendChild(b);
     });
   });
+}
+
+/** 공격을 확정하기 전의 마지막 확인. 취소하면 무기 선택으로 돌아가지 않고 행동을 이어 간다. */
+export async function confirmAttack(weapon: number): Promise<boolean> {
+  const game = session.game;
+  const me = activeUnit(game);
+  const foe = game.units[FOE];
+  const w = me.def.weapons[weapon];
+  const cost = [w.enCost ? `EN ${w.enCost} 소비` : '', w.ammo !== null ? `탄 1 소비 (남은 ${me.ammo[weapon]})` : ''].filter(Boolean).join(' · ');
+  const r = await sheet<boolean>('공격 확인', (close, box) => {
+    const info = document.createElement('div');
+    info.className = 'opt';
+    info.innerHTML = `<b>${me.def.name}의 ${w.name} → ${foe.def.name}</b>
+      <small>${strikeText(me, foe, weapon)}${cost ? ' · ' + cost : ''}</small>
+      <small>상대의 반응(반격·방어·회피)은 공격하면 정해집니다.</small>`;
+    box.appendChild(info);
+    addEffectsToggle(box);
+    const row = document.createElement('div');
+    row.className = 'row2';
+    row.style.marginTop = '12px';
+    row.innerHTML = '<button id="no">취소</button><button class="primary" id="yes">공격</button>';
+    row.querySelector('#no')!.addEventListener('click', () => close(false));
+    row.querySelector('#yes')!.addEventListener('click', () => close(true));
+    box.appendChild(row);
+  });
+  return r === true;
 }
 
 export function pickSpirit(): Promise<SpiritId | null> {
@@ -90,6 +140,7 @@ export async function askDefense(weapon: number): Promise<DefenseChoice> {
     }
     add(`<b>방어</b><small>받는 피해 절반, 반격 없음 · ${strikeText(atk, me, weapon, false, true)}</small>`, { kind: 'guard' });
     add(`<b>회피</b><small>명중률 절반, 반격 없음 · ${strikeText(atk, me, weapon, true, false)}</small>`, { kind: 'evade' });
+    addEffectsToggle(box);
   });
   return r ?? { kind: 'guard' };
 }

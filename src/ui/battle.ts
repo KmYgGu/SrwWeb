@@ -4,7 +4,7 @@ import type { RosterEntry } from '../core/types';
 import { draw, initBoard, layout, tileAt } from './board';
 import { playerAct, setFinishHandler } from './flow';
 import { refreshHud, resetHud } from './hud';
-import { pickSpirit, pickWeapon } from './sheets';
+import { confirmAttack, pickSpirit, pickWeapon } from './sheets';
 import { ME, session } from './session';
 
 const app = () => document.getElementById('app')!;
@@ -29,7 +29,7 @@ async function onWeapon() {
   const game = session.game;
   if (session.busy || game.turn.side !== ME || game.turn.acted) return;
   const weapon = await pickWeapon();
-  if (weapon !== null) await playerAct({ type: 'attack', weapon });
+  if (weapon !== null && (await confirmAttack(weapon))) await playerAct({ type: 'attack', weapon });
 }
 
 async function onSpirit() {

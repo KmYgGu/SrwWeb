@@ -27,7 +27,7 @@ export function showTitle(onStart: Start) {
       </div>
       <h2>맵</h2>
       <div class="cards">${MAPS.map((m) => card(m.name, '', m.id === pickMap, 'map', m.id)).join('')}</div>
-      <button class="primary" id="start" style="width:100%">전투 준비</button>
+      <button class="primary" id="start" style="width:100%">전투 시작</button>
     </div>`;
   const pick = (attr: string, fn: (v: string) => void) =>
     app.querySelectorAll<HTMLElement>(`[data-${attr}]`).forEach((b) =>
