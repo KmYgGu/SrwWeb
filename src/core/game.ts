@@ -37,6 +37,7 @@ function newUnit(side: Side, entry: RosterEntry, spawn: Pos): Unit {
     ammo: entry.unit.weapons.map((w) => w.ammo),
     sp: entry.pilot.sp,
     used: [],
+    lastWeapon: null,
     buffs: freshBuffs(),
   };
 }
@@ -47,7 +48,7 @@ export function createGame(p0: RosterEntry, p1: RosterEntry, seed: number, mapId
     mapId: map.id,
     grid: buildGrid(map),
     units: [newUnit(0, p0, map.spawns[0]), newUnit(1, p1, map.spawns[1])],
-    turn: { side: 0, movedBefore: false, acted: false, movedAfter: false, mpLeft: 0 },
+    turn: { side: 0, movedBefore: false, acted: false, mpLeft: 0 },
     round: 1,
     lastClash: 1,
     winner: null,
@@ -87,7 +88,7 @@ function beginTurn(s: GameState) {
   const start = turnStartOf(u.pilot);
   if (start.hpRatio > 0) u.hp = Math.min(u.def.hp, u.hp + Math.round(u.def.hp * start.hpRatio));
   if (start.en > 0) u.en = Math.min(u.def.en, u.en + start.en);
-  s.turn = { side: s.turn.side, movedBefore: false, acted: false, movedAfter: false, mpLeft: baseMove(u) };
+  s.turn = { side: s.turn.side, movedBefore: false, acted: false, mpLeft: baseMove(u) };
 }
 
 function finish(s: GameState, winner: GameState['winner']) {
@@ -115,8 +116,8 @@ function endTurn(s: GameState) {
 export function canMove(s: GameState): boolean {
   const t = s.turn;
   if (s.winner !== null || t.mpLeft <= 0) return false;
-  if (!t.acted) return !t.movedBefore;
-  return movesAfterAttack(activeUnit(s).pilot) && !t.movedAfter;
+  // 공격 전에는 남은 이동력 안에서 몇 번이든 옮길 수 있고, 공격 뒤에는 히트&어웨이일 때만 옮길 수 있다.
+  return !t.acted || movesAfterAttack(activeUnit(s).pilot);
 }
 
 export function moveRange(s: GameState): Map<number, ReachNode> {
@@ -211,8 +212,7 @@ export function perform(s: GameState, action: Action, defense?: DefenseChoice): 
       if (!node) return fail('갈 수 없는 칸');
       me.pos = { ...action.to };
       t.mpLeft -= node.cost;
-      if (t.acted) t.movedAfter = true;
-      else t.movedBefore = true;
+      if (!t.acted) t.movedBefore = true;
       if (t.acted && !canMove(s) && !anyCastable(s)) endTurn(s);
       return done();
     }
@@ -234,6 +234,10 @@ export function perform(s: GameState, action: Action, defense?: DefenseChoice): 
       writeBack(foe, leaf.d);
       for (const ev of leaf.events) s.log.push(describe(ev, me, foe));
       t.acted = true;
+      me.lastWeapon = wi;
+      if (defense.kind === 'counter' && leaf.events.some((ev) => ev.by === 1 && ev.tag === 'counter')) {
+        foe.lastWeapon = defense.weapon;
+      }
       s.lastClash = s.round;
       if (foe.hp <= 0) finish(s, me.side);
       else if (me.hp <= 0) finish(s, foe.side);

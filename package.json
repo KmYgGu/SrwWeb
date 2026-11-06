@@ -7,7 +7,8 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "sim": "tsx src/sim/sim.ts"
+    "sim": "tsx src/sim/sim.ts",
+    "check": "tsx src/sim/check.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

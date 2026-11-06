@@ -93,7 +93,7 @@ export const EFFECTS: Handlers = {
   },
   again: {
     apply: (_e, c) => {
-      Object.assign(c.turn, { movedBefore: false, acted: false, movedAfter: false, mpLeft: c.baseMove });
+      Object.assign(c.turn, { movedBefore: false, acted: false, mpLeft: c.baseMove });
     },
     usable: (_e, c) => c.turn.acted,
   },

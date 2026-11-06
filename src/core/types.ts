@@ -126,6 +126,8 @@ export interface Unit {
   ammo: (number | null)[];
   sp: number;
   used: SpiritId[];
+  /** 가장 최근에 쓴 무기 번호(공격이든 반격이든). 아직 없으면 null */
+  lastWeapon: number | null;
   buffs: Buffs;
 }
 
@@ -134,8 +136,6 @@ export interface TurnState {
   /** 이번 행동에서 공격 전에 이동했는가(P무기 판정) */
   movedBefore: boolean;
   acted: boolean;
-  /** 공격 후 이동(히트&어웨이)을 이미 썼는가 */
-  movedAfter: boolean;
   mpLeft: number;
 }
 

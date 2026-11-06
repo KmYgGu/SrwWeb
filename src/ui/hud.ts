@@ -32,7 +32,9 @@ function buffChips(u: Unit): string {
 
 function info(u: Unit): string {
   const abil = u.pilot.abilities.map((a) => ABILITIES[a].name).join(' · ');
-  return `<b>${u.def.name} / ${u.pilot.name}</b> · SP ${u.sp}<small>${abil}</small><div class="chips">${buffChips(u)}</div>`;
+  const lw = u.lastWeapon === null ? null : u.def.weapons[u.lastWeapon];
+  const last = lw ? `<small>최근 무기: ${lw.name} (사거리 ${lw.minRange}-${lw.maxRange})</small>` : '';
+  return `<b>${u.def.name} / ${u.pilot.name}</b> · SP ${u.sp}<small>${abil}</small>${last}<div class="chips">${buffChips(u)}</div>`;
 }
 
 const $ = (id: string) => document.getElementById(id)!;

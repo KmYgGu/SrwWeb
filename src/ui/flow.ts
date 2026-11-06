@@ -2,11 +2,12 @@
 import { ABILITIES } from '../core/abilities';
 import { chooseDefense, decide, PROFILES } from '../ai/ai';
 import type { DefenseChoice, StrikeEvent } from '../core/exchange';
-import { perform } from '../core/game';
+import { activeUnit, moveRange, perform } from '../core/game';
+import { pathTo } from '../core/map';
 import type { Action } from '../core/types';
 import { popText } from './board';
 import { askDefense } from './sheets';
-import { FOE, ME, session, sleep } from './session';
+import { FOE, ME, moveDuration, session, sleep } from './session';
 
 const AI_PROFILE = PROFILES.balanced;
 
@@ -27,10 +28,19 @@ function showEvents(events: StrikeEvent[], attacker: number) {
 }
 
 async function exec(act: Action, defense?: DefenseChoice) {
+  // 이동 경로는 규칙이 위치를 바꾸기 전에 구해 둔다.
+  const side = activeUnit(session.game).side;
+  const path = act.type === 'move' ? pathTo(moveRange(session.game), act.to) : [];
   const r = perform(session.game, act, defense);
   if (!r.ok) {
     console.warn(r.error);
     return;
+  }
+  if (path.length > 1) {
+    const dur = moveDuration(path.length - 1);
+    session.anim = { side, path, t0: performance.now(), dur };
+    await sleep(dur);
+    session.anim = null;
   }
   if (r.events.length) {
     showEvents(r.events, r.attacker);
