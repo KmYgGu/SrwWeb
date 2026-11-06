@@ -136,6 +136,28 @@ export function calcStrike(
   return { hit, dmg, flash: false };
 }
 
+/**
+ * 공격 한 번이 줄 수 있는 피해 합계(오버킬 표시용). 빗나감·실드·배리어는 따지지 않는 최대치다.
+ * 이 게임에는 크리티컬이 없어서, followUps 가 true 이면 추격까지 더해 "운이 좋을 때"를 대신한다.
+ * 상대의 섬광(첫 타 무효)과 피격 배율(불굴 등)은 반영한다.
+ */
+export function maxStrikeDamage(
+  env: Env,
+  atk: Fighter,
+  def: Fighter,
+  wi: number,
+  followUps: boolean,
+  guard = false,
+): number {
+  const w = atk.u.def.weapons[wi];
+  const open: Fighter = def.b.flash ? { ...def, b: { ...def.b, flash: false } } : def;
+  let per = calcStrike(env, atk, open, w, false, guard).dmg;
+  if (def.b.takenMul !== 1) per = Math.max(RULES.minDamage, Math.round(per * def.b.takenMul));
+  let hits = 1 + (followUps && atk.morale - def.morale >= RULES.followGap ? 1 : 0);
+  if (def.b.flash) hits -= 1;
+  return per * Math.max(0, hits);
+}
+
 export function counterWeapons(def: Fighter, atk: Fighter): number[] {
   const d = dist(def.pos, atk.pos);
   const out: number[] = [];

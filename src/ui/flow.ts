@@ -6,7 +6,7 @@ import { activeUnit, foeUnit, perform } from '../core/game';
 import { dist, pathTo, reachable } from '../core/map';
 import type { Action, Side } from '../core/types';
 import { popText } from './board';
-import { askDefense } from './sheets';
+import { askDefense } from './battleSheet';
 import { AIM_HOLD_MS, AIM_RESULT_MS, aimTravel, FOE, ME, moveDuration, session, sleep } from './session';
 
 const AI_PROFILE = PROFILES.balanced;

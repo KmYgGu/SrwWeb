@@ -60,6 +60,7 @@ canvas { touch-action: manipulation; display: block; }
 .cmds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 6px 10px; background: var(--panel); }
 
 .sheet { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); display: flex; align-items: flex-end; justify-content: center; z-index: 5; }
+.sheet > div.tall { max-height: 94dvh; }
 .sheet > div { width: 100%; max-width: 520px; background: var(--panel); border-radius: 14px 14px 0 0; padding: 12px; max-height: 75dvh; overflow-y: auto; }
 .sheet h3 { margin: 0 0 8px; font-size: 15px; }
 .opt { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
@@ -75,3 +76,24 @@ canvas { touch-action: manipulation; display: block; }
 .toggle .sel { border-color: var(--me); background: #1d2a44; }
 .note { color: var(--dim); font-size: 12px; margin: 6px 0 12px; }
 .row2 { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+
+/* 공격·방어 선택 화면: 양쪽 유닛 정보 */
+.duel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.ucard { background: #141a28; border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: grid; gap: 3px; align-content: start; font-size: 11px; min-width: 0; }
+.ucard.me { border-top: 3px solid var(--me); }
+.ucard.foe { border-top: 3px solid var(--foe); }
+.ucard small { color: var(--dim); line-height: 1.35; }
+.ucard > b { font-size: 12px; }
+.figure { position: relative; aspect-ratio: 1 / 1; max-height: 24dvh; width: 100%; border-radius: 8px; overflow: hidden; background: linear-gradient(160deg, #1d2a44, #0b0d13); }
+.figure img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.figure .ph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 40px; font-weight: 700; color: rgba(255, 255, 255, 0.25); }
+.ko { text-align: center; font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #fff; background: #d32f2f; border-radius: 6px; padding: 2px 0; animation: koPulse 0.9s ease-in-out infinite; }
+.ko[hidden] { display: none; }
+@keyframes koPulse { 50% { background: #ff6b5e; } }
+.tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 8px; background: #d32f2f; color: #fff; font-size: 10px; font-weight: 700; }
+.weapons { display: grid; gap: 6px; }
+.weapons .opt { margin-bottom: 0; }
+.opt.selected { border-color: var(--me); background: #1d2a44; }
+
+/* 공격 버튼은 화면 아래에 붙여 두어, 목록이 길어도 스크롤 없이 누를 수 있다 */
+.row2.sticky { position: sticky; bottom: -12px; margin: 12px -12px -12px; padding: 10px 12px 12px; background: var(--panel); border-top: 1px solid var(--line); }

@@ -1,6 +1,7 @@
 /** 규칙의 핵심 약속을 짧게 확인한다. 실행: npm run check */
 import assert from 'node:assert/strict';
 import { ROSTER, RULES } from '../core/data';
+import { fighterOf, maxStrikeDamage } from '../core/exchange';
 import { activeUnit, canMove, createGame, hasMoved, moveRange, perform, weaponStatus } from '../core/game';
 import { dist, keyPos, reachable } from '../core/map';
 import { MORALE } from '../core/personalities';
@@ -142,6 +143,22 @@ const longbow = ROSTER.find((r) => r.unit.id === 'longbow')!;
   activeUnit(t).morale = MORALE.max - 3;
   assert.ok(perform(t, { type: 'spirit', id: 'spirit' }).ok);
   assert.equal(activeUnit(t).morale, MORALE.max);
+}
+
+// 5-5. 오버킬 표시용 최대 피해: 추격과 섬광, 피격 배율을 반영한다.
+{
+  const s = createGame(blazer, longbow, 1);
+  const env = { grid: s.grid };
+  const a = fighterOf(s.units[0]);
+  const d = fighterOf(s.units[1]);
+  const one = maxStrikeDamage(env, a, d, 1, false);
+  assert.ok(one > 0);
+  assert.equal(maxStrikeDamage(env, a, d, 1, true), one, '기력 차이가 없으면 추격이 없다');
+  const high = { ...a, morale: a.morale + RULES.followGap };
+  assert.ok(maxStrikeDamage(env, high, d, 1, true) > one * 1.9, '기력 차이가 기준 이상이면 두 번 친다');
+  assert.equal(maxStrikeDamage(env, a, { ...d, b: { ...d.b, flash: true } }, 1, false), 0, '섬광은 첫 타를 막는다');
+  const half = maxStrikeDamage(env, a, { ...d, b: { ...d.b, takenMul: 0.5 } }, 1, false);
+  assert.ok(half < one, '불굴은 피해를 줄인다');
 }
 
 // 6. 연출 시간: 이동은 거리와 상관없이 1초 이내, 조준선은 같은 칸 수에서 항상 이동보다 빠르다.
