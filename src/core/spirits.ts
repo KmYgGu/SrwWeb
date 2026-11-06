@@ -105,6 +105,7 @@ export const EFFECTS: Handlers = {
         attackedInPlace: false,
         movedAfter: false,
         moveBudget: c.baseMove,
+        moveEn: 0,
       });
     },
     usable: (_e, c) => c.turn.acted,

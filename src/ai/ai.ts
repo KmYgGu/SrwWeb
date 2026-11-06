@@ -314,6 +314,8 @@ interface AttackCand {
   moved: boolean;
   wi: number;
   leftover: number;
+  /** 이동에 EN 을 쓰고 난 뒤의 EN */
+  en: number;
   coarse: number;
 }
 
@@ -332,14 +334,16 @@ export function search(ctx: Ctx, S: GameState): Plan {
   let best: Plan = { value: -Infinity, move: null, weapon: null };
   const attacks: AttackCand[] = [];
 
-  for (const k of reach.keys()) {
+  for (const [k, node] of reach) {
     const pos = keyPos(k);
     // needsMove: 지금 칸에서 옮겨야 하는가. away: 이번 행동의 시작 칸을 벗어났는가(P무기·히트&어웨이 판정)
     const needsMove = !samePos(pos, me.pos);
     const away = !samePos(pos, S.turn.startPos);
     // 히트&어웨이는 제자리에서 공격했을 때만 공격 뒤에 움직일 수 있다.
     const leftover = away ? 0 : S.turn.moveBudget;
-    const fm: Fighter = { ...fm0, pos };
+    // 이동에는 EN 이 든다. 그 자리에서 쓸 수 있는 무기와 점수가 이 EN 을 기준으로 정해진다.
+    const en = fm0.en + S.turn.moveEn - node.en;
+    const fm: Fighter = { ...fm0, pos, en };
     const riskNow = postRisk(ctx, S, fm, fo, acted ? 0 : leftover);
 
     // 공격하지 않고 마치는 계획
@@ -363,14 +367,14 @@ export function search(ctx: Ctx, S: GameState): Plan {
       }
       ctx.trace?.push(`atk@(${pos.x},${pos.y}) w${wi} coarse=${v.toFixed(3)} riskNow=${riskNow.toFixed(3)}`);
       v += idleBonus;
-      attacks.push({ pos, moved: needsMove, wi, leftover, coarse: v });
+      attacks.push({ pos, moved: needsMove, wi, leftover, en, coarse: v });
     });
   }
 
   // 상위 후보만 결과마다 정확한 위험도로 다시 계산한다.
   attacks.sort((a, b) => b.coarse - a.coarse);
   for (const c of attacks.slice(0, ctx.prof.tuning.refineTop)) {
-    const fm: Fighter = { ...fm0, pos: c.pos };
+    const fm: Fighter = { ...fm0, pos: c.pos, en: c.en };
     let v = Infinity;
     for (const def of defenseOptions(fo, fm)) {
       let e = 0;

@@ -1,4 +1,4 @@
-import { GRID_H, GRID_W, TERRAINS } from './data';
+import { GRID_H, GRID_W, RULES, TERRAINS } from './data';
 import type { MoveClass, Pos, TerrainDef, TerrainId } from './types';
 
 export const tileKey = (x: number, y: number) => y * GRID_W + x;
@@ -12,8 +12,11 @@ export function terrainAt(grid: TerrainId[][], p: Pos): TerrainDef {
 }
 
 export interface ReachNode {
+  /** 이동력(지형에 따라 늘어난다. 공중은 칸 수) */
   cost: number;
   prev: number;
+  /** 이 칸까지 가는 길에서 드는 EN */
+  en: number;
 }
 
 const DIRS = [
@@ -32,7 +35,7 @@ export function reachable(
   blocked: Pos | null,
 ): Map<number, ReachNode> {
   const start = tileKey(from.x, from.y);
-  const best = new Map<number, ReachNode>([[start, { cost: 0, prev: -1 }]]);
+  const best = new Map<number, ReachNode>([[start, { cost: 0, prev: -1, en: 0 }]]);
   const open: number[] = [start];
   while (open.length > 0) {
     let bi = 0;
@@ -41,6 +44,7 @@ export function reachable(
     }
     const cur = open.splice(bi, 1)[0];
     const curCost = best.get(cur)!.cost;
+    const curEn = best.get(cur)!.en;
     const cx = cur % GRID_W;
     const cy = Math.floor(cur / GRID_W);
     for (const [dx, dy] of DIRS) {
@@ -51,12 +55,14 @@ export function reachable(
       const t = TERRAINS[grid[ny][nx]];
       if (moveClass === 'ground' && !t.groundPass) continue;
       const step = moveClass === 'air' ? 1 : t.cost;
+      const stepEn = moveClass === 'air' ? RULES.airMoveEn : t.enCost;
       const nc = curCost + step;
       if (nc > budget) continue;
       const nk = tileKey(nx, ny);
       const old = best.get(nk);
-      if (!old || nc < old.cost) {
-        best.set(nk, { cost: nc, prev: cur });
+      const ne = curEn + stepEn;
+      if (!old || nc < old.cost || (nc === old.cost && ne < old.en)) {
+        best.set(nk, { cost: nc, prev: cur, en: ne });
         if (!open.includes(nk)) open.push(nk);
       }
     }

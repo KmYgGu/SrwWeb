@@ -1,5 +1,5 @@
 import { ABILITIES } from '../core/abilities';
-import { anyCastable } from '../core/game';
+import { anyCastable, weaponStatus } from '../core/game';
 import { PERSONALITIES } from '../core/personalities';
 import { activeSpiritLabels } from '../core/spirits';
 import type { Unit } from '../core/types';
@@ -41,7 +41,7 @@ export function refreshHud() {
   const foe = game.units[FOE];
   const mine = game.turn.side === ME && !session.busy && game.winner === null;
   const html = [corner(me), corner(foe), info(me), info(foe)];
-  const key = `${html.join('|')}|${mine}|${game.turn.acted}|${game.log.length}`;
+  const key = `${html.join('|')}|${mine}|${game.turn.acted}|${game.log.length}|${me.pos.x},${me.pos.y},${foe.pos.x},${foe.pos.y}`;
   if (key === last) return;
   last = key;
   $('meCorner').innerHTML = html[0];
@@ -51,7 +51,10 @@ export function refreshHud() {
   const log = $('log');
   log.innerHTML = game.log.slice(-30).map((l) => `<div>${l}</div>`).join('');
   log.scrollTop = log.scrollHeight;
-  ($('bAtk') as HTMLButtonElement).disabled = !mine || game.turn.acted;
+  const atk = $('bAtk') as HTMLButtonElement;
+  atk.disabled = !mine || game.turn.acted;
+  // 지금 자리에서 쓸 수 있는 무기가 있으면 공격 버튼 색을 바꿔 알린다(이동한 뒤 닿는지 바로 알 수 있다).
+  atk.classList.toggle('ready', mine && !game.turn.acted && me.def.weapons.some((_, i) => weaponStatus(game, me, i) === 'ok'));
   ($('bSp') as HTMLButtonElement).disabled = !mine || !anyCastable(game);
   const end = $('bEnd') as HTMLButtonElement;
   end.disabled = !mine;

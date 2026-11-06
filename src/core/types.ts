@@ -17,6 +17,8 @@ export interface TerrainDef {
   name: string;
   /** 지상 유닛이 들어가는 데 드는 이동력 */
   cost: number;
+  /** 지상 유닛이 이 칸에 들어갈 때 드는 EN(공중 유닛은 지형과 상관없이 RULES.airMoveEn) */
+  enCost: number;
   groundPass: boolean;
   /** 지상 유닛의 회피 보너스(%p) */
   eva: number;
@@ -148,6 +150,8 @@ export interface TurnState {
   movedAfter: boolean;
   /** 이번 행동의 이동 범위(비용 합계 상한). 이동해도 줄지 않는다 */
   moveBudget: number;
+  /** 이번 행동에서 이동에 이미 낸 EN. 다시 고르면 차액만 정산하고, 공격하면 확정된다 */
+  moveEn: number;
 }
 
 export interface GameState {

@@ -50,7 +50,7 @@ export function createGame(p0: RosterEntry, p1: RosterEntry, seed: number, mapId
     mapId: map.id,
     grid: buildGrid(map),
     units: [newUnit(0, p0, map.spawns[0]), newUnit(1, p1, map.spawns[1])],
-    turn: { side: 0, startPos: { x: 0, y: 0 }, acted: false, attackedInPlace: false, movedAfter: false, moveBudget: 0 },
+    turn: { side: 0, startPos: { x: 0, y: 0 }, acted: false, attackedInPlace: false, movedAfter: false, moveBudget: 0, moveEn: 0 },
     round: 1,
     lastClash: 1,
     winner: null,
@@ -97,6 +97,7 @@ function beginTurn(s: GameState) {
     attackedInPlace: false,
     movedAfter: false,
     moveBudget: baseMove(u),
+    moveEn: 0,
   };
 }
 
@@ -138,7 +139,11 @@ export function moveRange(s: GameState): Map<number, ReachNode> {
   const u = activeUnit(s);
   // 공격 전에는 시작 칸에서, 공격 뒤에는 지금 칸에서 잰다.
   const anchor = s.turn.acted ? u.pos : s.turn.startPos;
-  return reachable(s.grid, u.def.moveClass, anchor, canMove(s) ? s.turn.moveBudget : 0, foeUnit(s).pos);
+  const reach = reachable(s.grid, u.def.moveClass, anchor, canMove(s) ? s.turn.moveBudget : 0, foeUnit(s).pos);
+  // 이동에는 EN 이 든다. 이번 행동에서 이미 낸 EN 까지 합친 만큼만 쓸 수 있고, 모자라는 칸은 갈 수 없다.
+  const available = u.en + s.turn.moveEn;
+  for (const [k, n] of reach) if (n.en > available) reach.delete(k);
+  return reach;
 }
 
 const effectCtx = (s: GameState, u: Unit): EffectCtx => ({
@@ -232,6 +237,11 @@ export function perform(s: GameState, action: Action, defense?: DefenseChoice): 
       if (samePos(action.to, me.pos)) return fail('같은 칸');
       const node = moveRange(s).get(tileKey(action.to.x, action.to.y));
       if (!node) return fail('갈 수 없는 칸');
+      // 다시 고른 이동은 시작 칸에서 새 목적지까지의 EN 과 이미 낸 EN 의 차액만 정산한다(돌아가면 돌려받는다).
+      const delta = node.en - t.moveEn;
+      me.en -= delta;
+      t.moveEn = node.en;
+      s.log.push(`${me.def.name} 이동 (EN ${delta > 0 ? '-' : '+'}${Math.abs(delta)})`);
       me.pos = { ...action.to };
       if (t.acted) t.movedAfter = true;
       return done();
@@ -256,6 +266,7 @@ export function perform(s: GameState, action: Action, defense?: DefenseChoice): 
       for (const ev of leaf.events) s.log.push(describe(ev, me, foe));
       t.acted = true;
       t.attackedInPlace = !moved;
+      t.moveEn = 0; // 공격 전의 이동은 여기서 확정된다
       me.lastWeapon = wi;
       if (defense.kind === 'counter' && leaf.events.some((ev) => ev.by === 1 && ev.tag === 'counter')) {
         foe.lastWeapon = defense.weapon;

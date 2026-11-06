@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { ROSTER, RULES } from '../core/data';
 import { fighterOf, maxStrikeDamage } from '../core/exchange';
 import { activeUnit, canMove, createGame, hasMoved, moveRange, perform, weaponStatus } from '../core/game';
-import { dist, keyPos, reachable } from '../core/map';
+import { dist, keyPos, reachable, tileKey } from '../core/map';
 import { MORALE } from '../core/personalities';
 import { activeSpiritLabels } from '../core/spirits';
 import { aimTravel, moveDuration } from '../ui/session';
@@ -37,6 +37,42 @@ const longbow = ROSTER.find((r) => r.unit.id === 'longbow')!;
   // 시작 칸에서 닿지 않는 칸은 갈 수 없다.
   const far = { x: start.x, y: Math.max(0, start.y - 9) };
   assert.ok(!perform(s, { type: 'move', to: far }).ok);
+}
+
+// 1-2. 이동에는 EN 이 든다: 지상은 들어가는 칸의 지형마다, 공중은 칸 수에 일정하게. 다시 고르면 차액만 정산한다.
+{
+  const s = createGame(blazer, longbow, 1);
+  const me = activeUnit(s);
+  const en0 = me.en;
+  assert.ok(perform(s, { type: 'move', to: { x: 3, y: 11 } }).ok); // 평지
+  assert.equal(me.en, en0 - 1, '평지는 EN 1');
+  assert.ok(perform(s, { type: 'move', to: { x: 4, y: 10 } }).ok); // 산
+  assert.equal(me.en, en0 - 3, '산은 EN 3');
+  assert.ok(perform(s, { type: 'move', to: { x: 3, y: 11 } }).ok);
+  assert.equal(me.en, en0 - 1, '다시 고르면 차액만큼 돌려받는다');
+  assert.ok(perform(s, { type: 'move', to: { x: 4, y: 11 } }).ok);
+  assert.equal(me.en, en0, '시작 칸으로 돌아오면 전부 돌려받는다');
+  me.en = 1;
+  assert.ok(!perform(s, { type: 'move', to: { x: 4, y: 10 } }).ok, 'EN 이 모자라면 산에는 못 간다');
+  for (const k of moveRange(s).keys()) assert.ok(moveRange(s).get(k)!.en <= 1, '갈 수 있는 칸은 EN 안에 든다');
+
+  const z = createGame(ROSTER.find((r) => r.unit.id === 'zephyr')!, blazer, 1);
+  const air = activeUnit(z);
+  const airEn0 = air.en;
+  const node = moveRange(z).get(tileKey(4, 9))!; // (4,9): 산을 넘어 두 칸
+  assert.equal(node.cost, 2, '공중은 지형과 상관없이 칸 수만큼의 이동력');
+  assert.ok(perform(z, { type: 'move', to: { x: 4, y: 9 } }).ok);
+  assert.equal(air.en, airEn0 - 2 * RULES.airMoveEn, '공중은 지형과 상관없이 칸마다 일정한 EN');
+}
+
+// 1-3. 히트&어웨이의 공격 뒤 이동에도 EN 이 든다.
+{
+  const s = createGame(longbow, blazer, 1);
+  s.units[1].pos = { x: 4, y: 8 };
+  assert.ok(perform(s, { type: 'attack', weapon: 0 }, { kind: 'guard' }).ok);
+  const before = activeUnit(s).en;
+  assert.ok(perform(s, { type: 'move', to: { x: 4, y: 12 } }).ok);
+  assert.equal(activeUnit(s).en, before - 1, '평지 한 칸 = EN 1');
 }
 
 // 2. P무기는 시작 칸을 벗어나 있을 때만 막힌다(제자리로 돌아오면 다시 쓸 수 있다).

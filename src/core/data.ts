@@ -5,11 +5,11 @@ export const GRID_W = 9;
 export const GRID_H = 13;
 
 export const TERRAINS: Record<TerrainId, TerrainDef> = {
-  plain: { id: 'plain', name: '평지', cost: 1, groundPass: true, eva: 0, armor: 0, color: '#587a47' },
-  forest: { id: 'forest', name: '숲', cost: 2, groundPass: true, eva: 10, armor: 0, color: '#2f5d3a' },
-  mountain: { id: 'mountain', name: '산', cost: 3, groundPass: true, eva: 15, armor: 0.1, color: '#7a6a55' },
-  city: { id: 'city', name: '도시', cost: 1, groundPass: true, eva: 0, armor: 0.15, color: '#5e6b7d' },
-  sea: { id: 'sea', name: '바다', cost: 1, groundPass: false, eva: 0, armor: 0, color: '#2c5a8a' },
+  plain: { id: 'plain', name: '평지', cost: 1, enCost: 1, groundPass: true, eva: 0, armor: 0, color: '#587a47' },
+  forest: { id: 'forest', name: '숲', cost: 2, enCost: 2, groundPass: true, eva: 10, armor: 0, color: '#2f5d3a' },
+  mountain: { id: 'mountain', name: '산', cost: 3, enCost: 3, groundPass: true, eva: 15, armor: 0.1, color: '#7a6a55' },
+  city: { id: 'city', name: '도시', cost: 1, enCost: 1, groundPass: true, eva: 0, armor: 0.15, color: '#5e6b7d' },
+  sea: { id: 'sea', name: '바다', cost: 1, enCost: 0, groundPass: false, eva: 0, armor: 0, color: '#2c5a8a' },
 };
 
 /** 적응 등급이 낮을수록 주는 피해·명중이 줄고, 피하는 힘도 줄어든다. */
@@ -35,6 +35,8 @@ export const RULES = {
   hitMax: 100,
   /** 공격하지 않고 턴을 마치면 회복되는 EN */
   waitEn: 12,
+  /** 공중 유닛이 한 칸 움직일 때 드는 EN. 지형과 상관없이 일정하다(대신 지형에 따른 이동력 감소가 없다) */
+  airMoveEn: 2,
   turnLimit: 30,
 };
 
@@ -179,6 +181,39 @@ export const ROSTER: RosterEntry[] = [
       sp: 110,
       spirits: ['fortitude', 'ironwall', 'repair', 'supply', 'sure', 'spirit'],
       abilities: ['barrier', 'regen'],
+    },
+  },
+  {
+    id: 'skylancer',
+    name: '스카이랜서 / 미라',
+    blurb: '공중 폭격형. 지형을 무시하고 날아가 먼 거리에서 쏜다. 저격과 재생.',
+    unit: {
+      id: 'skylancer',
+      name: '스카이랜서',
+      hp: 12500,
+      en: 140,
+      armor: 1100,
+      mobility: 95,
+      move: 5,
+      moveClass: 'air',
+      adapt: { plain: 'D', forest: 'D', mountain: 'D', city: 'D', sea: 'D', air: 'A' },
+      weapons: [
+        { name: '기관포', kind: 'shoot', power: 2700, minRange: 1, maxRange: 3, accuracy: 85, enCost: 0, ammo: 20, isP: false },
+        { name: '폭격 미사일', kind: 'shoot', power: 4500, minRange: 2, maxRange: 5, accuracy: 80, enCost: 15, ammo: null, isP: false },
+        { name: '급강하 폭격', kind: 'shoot', power: 8800, minRange: 2, maxRange: 4, accuracy: 80, enCost: 45, ammo: null, isP: true, minMorale: MORALE.finisher },
+      ],
+    },
+    pilot: {
+      id: 'mira',
+      name: '미라',
+      melee: 90,
+      shoot: 130,
+      react: 105,
+      defense: 100,
+      sp: 100,
+      personality: 'normal',
+      spirits: ['sure', 'focus', 'spirit', 'repair', 'supply', 'again'],
+      abilities: ['sniper', 'regen'],
     },
   },
 ];

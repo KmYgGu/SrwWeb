@@ -114,3 +114,6 @@ canvas { touch-action: manipulation; display: block; }
 
 /* 두 카드의 길이가 달라도 명중률은 같은 높이(맨 아래)에 놓는다 */
 .ucard .hit { margin-top: auto; }
+
+/* 지금 자리에서 공격할 수 있을 때의 공격 버튼 */
+.cmds button.ready { background: #c2410c; border-color: #fb923c; color: #fff; font-weight: 700; }
