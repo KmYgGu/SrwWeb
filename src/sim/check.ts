@@ -5,6 +5,7 @@ import { fighterOf, maxStrikeDamage } from '../core/exchange';
 import { activeUnit, canMove, createGame, hasMoved, moveRange, perform, weaponStatus } from '../core/game';
 import { dist, keyPos, reachable } from '../core/map';
 import { MORALE } from '../core/personalities';
+import { activeSpiritLabels } from '../core/spirits';
 import { aimTravel, moveDuration } from '../ui/session';
 
 const blazer = ROSTER.find((r) => r.unit.id === 'blazer')!;
@@ -159,6 +160,18 @@ const longbow = ROSTER.find((r) => r.unit.id === 'longbow')!;
   assert.equal(maxStrikeDamage(env, a, { ...d, b: { ...d.b, flash: true } }, 1, false), 0, '섬광은 첫 타를 막는다');
   const half = maxStrikeDamage(env, a, { ...d, b: { ...d.b, takenMul: 0.5 } }, 1, false);
   assert.ok(half < one, '불굴은 피해를 줄인다');
+}
+
+// 5-6. 발동 중인 정신은 이름으로 보여 준다.
+{
+  const s = createGame(blazer, longbow, 1);
+  const u = activeUnit(s);
+  assert.deepEqual(activeSpiritLabels(u), []);
+  perform(s, { type: 'spirit', id: 'sure' });
+  perform(s, { type: 'spirit', id: 'fortitude' });
+  assert.deepEqual(activeSpiritLabels(u), ['필중', '불굴']);
+  u.buffs.takenMul = 0.125;
+  assert.ok(activeSpiritLabels(u).includes('피격×0.125'), '겹친 배율은 수치로 적는다');
 }
 
 // 6. 연출 시간: 이동은 거리와 상관없이 1초 이내, 조준선은 같은 칸 수에서 항상 이동보다 빠르다.

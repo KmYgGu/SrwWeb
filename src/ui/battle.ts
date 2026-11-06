@@ -1,11 +1,12 @@
 import { canMove, createGame, moveRange } from '../core/game';
-import { tileKey } from '../core/map';
+import { samePos, tileKey } from '../core/map';
 import type { RosterEntry } from '../core/types';
 import { draw, initBoard, layout, tileAt } from './board';
 import { playerAct, setFinishHandler } from './flow';
 import { refreshHud, resetHud } from './hud';
 import { chooseAttack } from './battleSheet';
 import { pickSpirit } from './sheets';
+import { showUnitInfo } from './unitInfo';
 import { ME, session } from './session';
 
 const app = () => document.getElementById('app')!;
@@ -20,8 +21,15 @@ function frame() {
 
 async function onBoardClick(e: MouseEvent) {
   const game = session.game;
-  if (session.busy || game.winner !== null || game.turn.side !== ME || !canMove(game)) return;
+  if (session.busy || game.winner !== null) return;
   const { x, y } = tileAt(e);
+  // 유닛이 선 칸을 누르면 그 유닛의 정보를 보여 준다(내 유닛이든 상대든).
+  const unit = game.units.find((u) => samePos(u.pos, { x, y }));
+  if (unit) {
+    await showUnitInfo(unit);
+    return;
+  }
+  if (game.turn.side !== ME || !canMove(game)) return;
   if (!moveRange(game).has(tileKey(x, y))) return;
   await playerAct({ type: 'move', to: { x, y } });
 }

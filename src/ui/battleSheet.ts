@@ -2,40 +2,34 @@
  * 공격이 오가기 직전의 최종 선택 화면.
  *  - 내가 공격할 때: 무기를 고르고 곧바로 확정한다(무기 선택과 확인이 한 화면).
  *  - 상대가 공격할 때: 반격·방어·회피를 고른다.
- * 두 경우 모두 양쪽 유닛의 정보를 보여 주고, 격추할 수 있으면 맞는 쪽 체력 위에 OVERKILL 을 띄운다.
+ * 두 경우 모두 양쪽 유닛의 정보(발동 중인 정신만)와 양쪽의 명중률을 한눈에 보이게 하고,
+ * 격추할 수 있으면 맞는 쪽 체력 위에 OVERKILL 을 띄운다.
  */
 import { ABILITIES } from '../core/abilities';
-import { calcStrike, counterWeapons, fighterOf, maxStrikeDamage, type DefenseChoice } from '../core/exchange';
+import { calcStrike, counterWeapons, fighterOf, maxStrikeDamage, type DefenseChoice, type Env, type Fighter } from '../core/exchange';
 import { activeUnit, envOf, weaponStatus } from '../core/game';
 import { PERSONALITIES } from '../core/personalities';
-import { SPIRITS } from '../core/spirits';
+import { activeSpiritLabels } from '../core/spirits';
 import type { Unit } from '../core/types';
 import { FOE, ME, session } from './session';
 import { addEffectsToggle, sheet, strikeText } from './sheets';
-
-/**
- * 유닛 전신 그림은 public/units/<기체 id>.png 에 넣으면 나타난다.
- * 파일이 없으면 이름 첫 글자만 있는 빈 칸이 남는다.
- */
-const unitImage = (u: Unit) => `${import.meta.env.BASE_URL}units/${u.def.id}.png`;
-
-const gauge = (kind: 'hp' | 'en', label: string, cur: number, max: number) =>
-  `<div class="gauge"><b>${label}</b><div class="bar ${kind}"><i style="width:${(cur / max) * 100}%"></i><span>${cur}</span></div></div>`;
+import { figure, gauge, spiritChips } from './unitView';
 
 function unitCard(u: Unit, role: 'me' | 'foe'): string {
   const abilities = u.pilot.abilities.map((a) => ABILITIES[a].name).join(' · ');
-  const spirits = u.pilot.spirits.map((id) => `${SPIRITS[id].name}${u.used.includes(id) ? '(사용)' : ''}`).join(' · ');
   const weapons = u.def.weapons.map((w) => `${w.name} ${w.minRange}-${w.maxRange}`).join(' · ');
   return `<div class="ucard ${role}">
-    <div class="figure"><div class="ph">${u.def.name[0]}</div><img src="${unitImage(u)}" alt="" onerror="this.remove()"></div>
+    ${figure(u)}
     <b>${u.def.name} / ${u.pilot.name}</b>
     <div class="ko" hidden>OVERKILL</div>
     ${gauge('hp', 'HP', u.hp, u.def.hp)}
     ${gauge('en', 'EN', u.en, u.def.en)}
     <small>기력 ${u.morale} · SP ${u.sp} · ${PERSONALITIES[u.pilot.personality].name}</small>
     <small>${abilities}</small>
-    <small>정신: ${spirits}</small>
     ${role === 'foe' ? `<small>무기: ${weapons}</small>` : ''}
+    <small>발동 중인 정신</small>
+    <div class="chips">${spiritChips(activeSpiritLabels(u))}</div>
+    <div class="hit"></div>
   </div>`;
 }
 
@@ -44,6 +38,33 @@ const duel = (me: Unit, foe: Unit) => `<div class="duel">${unitCard(me, 'me')}${
 /** 격추할 수 있을 때 맞는 쪽 카드의 체력 위에 OVERKILL 을 띄운다. */
 function setOverkill(box: HTMLElement, role: 'me' | 'foe', on: boolean) {
   box.querySelector<HTMLElement>(`.ucard.${role} .ko`)!.hidden = !on;
+}
+
+/** 카드 맨 아래의 큰 명중률 표시 */
+function setHit(box: HTMLElement, role: 'me' | 'foe', label: string, value: string) {
+  box.querySelector<HTMLElement>(`.ucard.${role} .hit`)!.innerHTML = `${value}<small>${label}</small>`;
+}
+
+const pct = (h: number) => `${Math.round(h * 100)}%`;
+
+function hitOf(env: Env, atk: Fighter, def: Fighter, wi: number): number {
+  return calcStrike(env, atk, def, atk.u.def.weapons[wi], false, false).hit;
+}
+
+/** def 가 atk 의 공격에 반격한다면 쓸 만한 무기(기대 피해가 가장 큰 것). 쓸 수 있는 무기가 없으면 null. */
+function bestCounter(env: Env, def: Fighter, atk: Fighter): { wi: number; hit: number } | null {
+  let best: { wi: number; hit: number; e: number } | null = null;
+  for (const wi of counterWeapons(def, atk)) {
+    const st = calcStrike(env, def, atk, def.u.def.weapons[wi], false, false);
+    if (!best || st.hit * st.dmg > best.e) best = { wi, hit: st.hit, e: st.hit * st.dmg };
+  }
+  return best;
+}
+
+function setCounterHit(box: HTMLElement, role: 'me' | 'foe', env: Env, def: Fighter, atk: Fighter) {
+  const c = bestCounter(env, def, atk);
+  if (c) setHit(box, role, `반격: ${def.u.def.weapons[c.wi].name}`, pct(c.hit));
+  else setHit(box, role, '반격', '불가');
 }
 
 const STATUS_TEXT = { ok: '', en: 'EN 부족', ammo: '탄 없음', morale: '기력 부족', p: '이동 후 불가(P)', range: '사거리 밖' };
@@ -77,6 +98,7 @@ export function chooseAttack(): Promise<number | null> {
     '공격 선택',
     (close, box) => {
       box.insertAdjacentHTML('beforeend', duel(me, foe));
+      setCounterHit(box, 'foe', env, fo, fm);
       const rows: HTMLButtonElement[] = [];
       const list = document.createElement('div');
       list.className = 'weapons';
@@ -111,6 +133,8 @@ export function chooseAttack(): Promise<number | null> {
       const paint = () => {
         rows.forEach((b, i) => b.classList.toggle('selected', i === selected));
         setOverkill(box, 'foe', selected !== null && kills[selected]);
+        if (selected === null) setHit(box, 'me', '무기를 고르세요', '—');
+        else setHit(box, 'me', me.def.weapons[selected].name, pct(hitOf(env, fm, fo, selected)));
         yes.disabled = selected === null;
       };
       paint();
@@ -138,6 +162,8 @@ export async function askDefense(weapon: number): Promise<DefenseChoice> {
     (close, box) => {
       box.insertAdjacentHTML('beforeend', duel(me, atk));
       setOverkill(box, 'me', lethal);
+      setHit(box, 'foe', w.name, pct(hitOf(env, fa, fd, weapon)));
+      setCounterHit(box, 'me', env, fd, fa);
       const list = document.createElement('div');
       list.className = 'weapons';
       const add = (html: string, choice: DefenseChoice, danger: boolean) => {

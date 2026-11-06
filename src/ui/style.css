@@ -79,7 +79,7 @@ canvas { touch-action: manipulation; display: block; }
 
 /* 공격·방어 선택 화면: 양쪽 유닛 정보 */
 .duel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-.ucard { background: #141a28; border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: grid; gap: 3px; align-content: start; font-size: 11px; min-width: 0; }
+.ucard { background: #141a28; border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: flex; flex-direction: column; gap: 3px; font-size: 11px; min-width: 0; }
 .ucard.me { border-top: 3px solid var(--me); }
 .ucard.foe { border-top: 3px solid var(--foe); }
 .ucard small { color: var(--dim); line-height: 1.35; }
@@ -97,3 +97,20 @@ canvas { touch-action: manipulation; display: block; }
 
 /* 공격 버튼은 화면 아래에 붙여 두어, 목록이 길어도 스크롤 없이 누를 수 있다 */
 .row2.sticky { position: sticky; bottom: -12px; margin: 12px -12px -12px; padding: 10px 12px 12px; background: var(--panel); border-top: 1px solid var(--line); }
+
+/* 카드 맨 아래 명중률: 눈에 바로 들어오게 크게 */
+.hit { text-align: center; font-size: 22px; font-weight: 800; line-height: 1.1; padding: 6px 0 4px; border-radius: 8px; background: #0b0d13; }
+.hit small { display: block; font-size: 10px; font-weight: 500; color: var(--dim); margin-top: 2px; }
+.ucard.me .hit { color: #7fe0ff; border: 1px solid #2b5f8a; }
+.ucard.foe .hit { color: #ff9d94; border: 1px solid #8a3b34; }
+.chip.dim { background: transparent; color: var(--dim); padding-left: 0; }
+
+/* 유닛 정보 화면 */
+.info { display: grid; gap: 4px; margin-top: 8px; }
+.info h4 { margin: 8px 0 0; font-size: 12px; color: var(--dim); font-weight: 600; border-top: 1px solid var(--line); padding-top: 6px; }
+.info small { color: var(--dim); font-size: 11px; line-height: 1.4; }
+.info ul { margin: 0; padding-left: 16px; display: grid; gap: 2px; font-size: 12px; }
+.info li.used { opacity: 0.5; }
+
+/* 두 카드의 길이가 달라도 명중률은 같은 높이(맨 아래)에 놓는다 */
+.ucard .hit { margin-top: auto; }

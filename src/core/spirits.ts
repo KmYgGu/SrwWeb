@@ -113,3 +113,21 @@ export const EFFECTS: Handlers = {
 
 /** effect 종류를 모르는 곳에서 쓰는 조회. 타입 정보는 호출 쪽에서 합쳐진다. */
 export const handlerOf = (e: SpiritEffect): Handler<SpiritEffect> => EFFECTS[e.t] as Handler<SpiritEffect>;
+
+/**
+ * 지금 발동 중인 정신의 이름. 쓰이거나 때가 되면 사라지는 상태(Buffs)를 정신 이름으로 되돌려 보여 준다.
+ * 같은 수치의 정신이 없으면(예: 불굴과 철벽을 겹친 경우) 배율을 그대로 적는다.
+ */
+export function activeSpiritLabels(u: Unit): string[] {
+  const b = u.buffs;
+  const byEffect = (t: SpiritEffect['t'], mul?: number) =>
+    Object.values(SPIRITS).find((s) => s.effect.t === t && (mul === undefined || ('mul' in s.effect && s.effect.mul === mul)))?.name;
+  const out: string[] = [];
+  if (b.sure) out.push(byEffect('sure')!);
+  if (b.flash) out.push(byEffect('flash')!);
+  if (b.takenMul !== 1) out.push(byEffect('taken', b.takenMul) ?? `피격×${b.takenMul}`);
+  if (b.dealtMul !== 1) out.push(byEffect('dealt', b.dealtMul) ?? `공격×${b.dealtMul}`);
+  if (b.focus) out.push(byEffect('focus')!);
+  if (b.pierce) out.push(byEffect('pierce')!);
+  return out;
+}

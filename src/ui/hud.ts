@@ -1,8 +1,10 @@
 import { ABILITIES } from '../core/abilities';
 import { anyCastable } from '../core/game';
 import { PERSONALITIES } from '../core/personalities';
+import { activeSpiritLabels } from '../core/spirits';
 import type { Unit } from '../core/types';
 import { FOE, ME, session } from './session';
+import { spiritChips } from './unitView';
 
 /**
  * 초상화 그림은 public/portraits/<파일럿 id>.png 에 넣으면 나타난다.
@@ -19,17 +21,7 @@ function corner(u: Unit): string {
     <div class="gauges">${gauge('hp', 'HP', u.hp, u.def.hp)}${gauge('en', 'EN', u.en, u.def.en)}</div>`;
 }
 
-function buffChips(u: Unit): string {
-  const b = u.buffs;
-  const c: string[] = [];
-  if (b.sure) c.push('필중');
-  if (b.flash) c.push('섬광');
-  if (b.takenMul !== 1) c.push(`피격×${b.takenMul}`);
-  if (b.dealtMul !== 1) c.push(`공격×${b.dealtMul}`);
-  if (b.focus) c.push('집중');
-  if (b.pierce) c.push('간파');
-  return c.map((x) => `<span class="chip">${x}</span>`).join('');
-}
+const buffChips = (u: Unit) => spiritChips(activeSpiritLabels(u));
 
 function info(u: Unit): string {
   const abil = u.pilot.abilities.map((a) => ABILITIES[a].name).join(' · ');
