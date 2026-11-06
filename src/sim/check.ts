@@ -64,6 +64,16 @@ const longbow = ROSTER.find((r) => r.unit.id === 'longbow')!;
   assert.ok(!canMove(t), '이동한 뒤 공격하면 공격 뒤에 움직일 수 없다');
 }
 
+// 3-2. 턴은 직접 끝낸다: 공격이나 이동, 정신 커맨드 뒤에 자동으로 넘어가지 않는다.
+{
+  const s = createGame(blazer, longbow, 1);
+  s.units[1].pos = { x: 4, y: 10 };
+  assert.ok(perform(s, { type: 'attack', weapon: 1 }, { kind: 'guard' }).ok);
+  assert.equal(s.turn.side, 0, '공격 뒤에도 내 턴');
+  assert.ok(perform(s, { type: 'wait' }).ok);
+  assert.equal(s.turn.side, 1, '턴 종료를 눌러야 넘어간다');
+}
+
 // 4. 공격하면 쓴 무기가 기억되고, 반격이 실제로 나가면 맞은 쪽도 기억한다.
 {
   const s = createGame(blazer, longbow, 1);

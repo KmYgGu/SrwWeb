@@ -59,7 +59,10 @@ export function refreshHud() {
   log.scrollTop = log.scrollHeight;
   ($('bAtk') as HTMLButtonElement).disabled = !mine || game.turn.acted;
   ($('bSp') as HTMLButtonElement).disabled = !mine || !anyCastable(game);
-  ($('bEnd') as HTMLButtonElement).disabled = !mine;
+  const end = $('bEnd') as HTMLButtonElement;
+  end.disabled = !mine;
+  // 공격을 마쳤으면 턴 종료가 다음 할 일이라는 걸 눈에 띄게 한다.
+  end.classList.toggle('primary', mine && game.turn.acted);
 }
 
 export function resetHud() {

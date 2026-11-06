@@ -206,6 +206,10 @@ function describe(ev: StrikeEvent, atk: Unit, def: Unit): string {
   }
 }
 
+/**
+ * 턴은 'wait' 행동으로만 끝난다(전투가 끝난 경우 제외). 공격이나 이동, 정신 커맨드 뒤에 자동으로 끝내지 않는다.
+ * 공격 뒤에 무엇이 남았는지(이동, 새 정신 커맨드)를 규칙이 일일이 따지면 정신이 늘 때마다 고쳐야 하기 때문이다.
+ */
 export function perform(s: GameState, action: Action, defense?: DefenseChoice): Result {
   if (s.winner !== null) return fail('이미 끝난 전투');
   const me = activeUnit(s);
@@ -226,7 +230,6 @@ export function perform(s: GameState, action: Action, defense?: DefenseChoice): 
       if (!node) return fail('갈 수 없는 칸');
       me.pos = { ...action.to };
       if (t.acted) t.movedAfter = true;
-      if (t.acted && !canMove(s) && !anyCastable(s)) endTurn(s);
       return done();
     }
     case 'attack': {
@@ -256,7 +259,6 @@ export function perform(s: GameState, action: Action, defense?: DefenseChoice): 
       s.lastClash = s.round;
       if (foe.hp <= 0) finish(s, me.side);
       else if (me.hp <= 0) finish(s, foe.side);
-      else if (!canMove(s) && !anyCastable(s)) endTurn(s);
       return done(leaf.events, me.side);
     }
     case 'wait': {
