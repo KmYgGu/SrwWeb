@@ -13,6 +13,8 @@ export interface MatchResult {
   spiritsUsed: [number, number];
   decideMs: number;
   decisions: number;
+  /** 필살기(기력 제한 무기)로 친 타격 수 */
+  finishers: number;
   state: GameState;
 }
 
@@ -42,6 +44,9 @@ export function playMatch(a: RosterEntry, b: RosterEntry, seed: number, profs: [
     spiritsUsed: [s.units[0].used.length, s.units[1].used.length],
     decideMs,
     decisions,
+    finishers: s.log.filter((l) =>
+      s.units.some((u) => u.def.weapons.some((w) => w.minMorale !== undefined && l.includes(w.name))),
+    ).length,
     state: s,
   };
 }
@@ -58,6 +63,7 @@ function main() {
   let ms = 0;
   let decisions = 0;
   let spirits = 0;
+  let finishers = 0;
 
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
@@ -83,6 +89,7 @@ function main() {
         ms += r.decideMs;
         decisions += r.decisions;
         spirits += r.spiritsUsed[0] + r.spiritsUsed[1];
+        finishers += r.finishers;
       }
       matrix[i][j] = `${wi}/${played}`;
     }
@@ -97,9 +104,9 @@ function main() {
     console.log(`${r.unit.name.padEnd(8)} ${((w.w / w.g) * 100).toFixed(0)}%  (승${w.w} 패${w.l} 무${w.d})`);
   });
   console.log(
-    `\n평균 ${(totalRounds / totalGames).toFixed(1)}라운드, 정신 ${(spirits / totalGames).toFixed(1)}회/판, ` +
+    `\n평균 ${(totalRounds / totalGames).toFixed(1)}라운드, 정신 ${(spirits / totalGames).toFixed(1)}회/판, 필살기 ${(finishers / totalGames).toFixed(1)}타/판, ` +
       `결정 ${(ms / decisions).toFixed(1)}ms/회 (총 ${totalGames}판)`,
   );
 }
 
-if (process.argv[1]?.includes('sim')) main();
+if (/sim.ts$/.test(process.argv[1] ?? '')) main();

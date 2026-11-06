@@ -1,5 +1,6 @@
 import { ABILITIES } from '../core/abilities';
 import { anyCastable } from '../core/game';
+import { PERSONALITIES } from '../core/personalities';
 import type { Unit } from '../core/types';
 import { FOE, ME, session } from './session';
 
@@ -34,7 +35,8 @@ function info(u: Unit): string {
   const abil = u.pilot.abilities.map((a) => ABILITIES[a].name).join(' · ');
   const lw = u.lastWeapon === null ? null : u.def.weapons[u.lastWeapon];
   const last = lw ? `<small>최근 무기: ${lw.name} (사거리 ${lw.minRange}-${lw.maxRange})</small>` : '';
-  return `<b>${u.def.name} / ${u.pilot.name}</b> · SP ${u.sp}<small>${abil}</small>${last}<div class="chips">${buffChips(u)}</div>`;
+  const pers = PERSONALITIES[u.pilot.personality].name;
+  return `<b>${u.def.name} / ${u.pilot.name}</b> · SP ${u.sp} · 기력 ${u.morale}<small>${pers} · ${abil}</small>${last}<div class="chips">${buffChips(u)}</div>`;
 }
 
 const $ = (id: string) => document.getElementById(id)!;

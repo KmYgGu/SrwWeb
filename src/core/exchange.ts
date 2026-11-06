@@ -6,6 +6,7 @@
 import { rangeBonusOf, reactionsOf, strikesFirstOnCounter } from './abilities';
 import { GRADE, RULES, TERRAINS } from './data';
 import { dist } from './map';
+import { clampMorale, MORALE, PERSONALITIES } from './personalities';
 import type { AbilityId, Buffs, Pos, TerrainId, Unit, WeaponDef } from './types';
 
 export interface Env {
@@ -19,6 +20,7 @@ export interface Fighter {
   hp: number;
   en: number;
   ammo: (number | null)[];
+  morale: number;
   b: Buffs;
 }
 
@@ -28,6 +30,7 @@ export const fighterOf = (u: Unit): Fighter => ({
   hp: u.hp,
   en: u.en,
   ammo: u.ammo.slice(),
+  morale: u.morale,
   b: { ...u.buffs },
 });
 
@@ -68,6 +71,7 @@ export const inRange = (f: Fighter, w: WeaponDef, d: number) =>
 export function weaponReady(f: Fighter, wi: number, afterMove: boolean): boolean {
   const w = f.u.def.weapons[wi];
   if (f.en < w.enCost) return false;
+  if (f.morale < (w.minMorale ?? 0)) return false;
   if (w.ammo !== null && (f.ammo[wi] ?? 0) <= 0) return false;
   return !(afterMove && w.isP);
 }
@@ -114,7 +118,8 @@ export function calcStrike(
       (T.b.focus ? RULES.focusBonus : 0);
     let h =
       w.accuracy +
-      (S.u.pilot.skill - T.u.pilot.react) * RULES.skillWeight +
+      (RULES.statBase - T.u.pilot.react) * RULES.reactWeight +
+      (S.morale - T.morale) * MORALE.hitPerPoint +
       sg.hit -
       evasion +
       (S.b.focus ? RULES.focusBonus : 0);
@@ -124,7 +129,7 @@ export function calcStrike(
   }
 
   const stat = w.kind === 'melee' ? S.u.pilot.melee : S.u.pilot.shoot;
-  const raw = w.power * (0.5 + stat / 200) * sg.dmg * S.b.dealtMul;
+  const raw = w.power * (0.5 + stat / 200) * sg.dmg * S.b.dealtMul * (1 + (S.morale - MORALE.base) * MORALE.dmgPerPoint);
   const armor = T.u.def.armor * (0.5 + T.u.pilot.defense / 200) * (1 + tb.armor);
   let dmg = Math.max(RULES.minDamage, Math.round(raw - armor));
   if (guard) dmg = Math.max(RULES.minDamage, Math.round(dmg * RULES.guardDmgMul));
@@ -173,7 +178,7 @@ function buildSteps(atk: Fighter, def: Fighter, wi: number, choice: DefenseChoic
   if (counterFirst) steps.push({ by: 1, weapon: cw, tag: 'counter' });
   steps.push({ by: 0, weapon: wi, tag: 'main' });
   if (cw >= 0 && !counterFirst) steps.push({ by: 1, weapon: cw, tag: 'counter' });
-  const gap = atk.u.pilot.skill - def.u.pilot.skill;
+  const gap = atk.morale - def.morale;
   if (gap >= RULES.followGap) steps.push({ by: 0, weapon: wi, tag: 'follow' });
   if (cw >= 0 && -gap >= RULES.followGap) steps.push({ by: 1, weapon: cw, tag: 'follow' });
   return steps;
@@ -209,8 +214,12 @@ function strikeBranches(env: Env, x: X, step: Step, choice: DefenseChoice, rec: 
 
   const make = (p: number, T: Fighter, info: Pick<StrikeEvent, 'result' | 'dmg' | 'ability' | 'reducedBy'>): Branch => {
     const f: [Fighter, Fighter] = [x.f[0], x.f[1]];
-    f[s] = Sd;
-    f[t] = T;
+    // 타격 하나마다 양쪽의 기력이 성격표대로 오르내린다(무효화·섬광은 빗나감과 회피로 친다).
+    const isHit = info.result === 'hit';
+    const ps = PERSONALITIES[Sd.u.pilot.personality];
+    const pt = PERSONALITIES[T.u.pilot.personality];
+    f[s] = { ...Sd, morale: clampMorale(Sd.morale + (isHit ? ps.onHit : ps.onMiss)) };
+    f[t] = { ...T, morale: clampMorale(T.morale + (isHit ? pt.onDamaged : pt.onDodge)) };
     const did: [boolean, boolean] = [x.did[0], x.did[1]];
     did[s] = true;
     const ev = rec ? [...x.ev, { by: s, tag: step.tag, weapon: w.name, ...info }] : x.ev;

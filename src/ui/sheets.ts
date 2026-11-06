@@ -27,7 +27,7 @@ function strikeText(atk: Unit, def: Unit, wi: number, evade = false, guard = fal
   return st.flash ? '명중 0% (섬광)' : `명중 ${Math.round(st.hit * 100)}% · 피해 ${st.dmg}`;
 }
 
-const STATUS_TEXT = { ok: '', en: 'EN 부족', ammo: '탄 없음', p: '이동 후 불가(P)', range: '사거리 밖' };
+const STATUS_TEXT = { ok: '', en: 'EN 부족', ammo: '탄 없음', morale: '기력 부족', p: '이동 후 불가(P)', range: '사거리 밖' };
 
 export function pickWeapon(): Promise<number | null> {
   const game = session.game;
@@ -39,7 +39,7 @@ export function pickWeapon(): Promise<number | null> {
       const b = document.createElement('button');
       b.className = 'opt' + (st === 'ok' ? '' : ' bad');
       b.disabled = st !== 'ok';
-      const cost = [w.enCost ? `EN ${w.enCost}` : '', w.ammo !== null ? `탄 ${me.ammo[i]}` : '', w.isP ? 'P' : '']
+      const cost = [w.enCost ? `EN ${w.enCost}` : '', w.ammo !== null ? `탄 ${me.ammo[i]}` : '', w.isP ? 'P' : '', w.minMorale ? `기력 ${w.minMorale}↑` : '']
         .filter(Boolean)
         .join(' · ');
       b.innerHTML = `<b>${w.name}</b> 사거리 ${w.minRange}-${w.maxRange} · 위력 ${w.power} ${cost ? '· ' + cost : ''}

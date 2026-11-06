@@ -3,6 +3,7 @@
  * 효과 종류가 실제로 하는 일은 EFFECTS 표에 한 번만 적는다.
  * 새 커맨드 = SPIRITS 에 항목 추가(기존 효과 재사용). 새 효과 종류 = EFFECTS 에 핸들러 추가.
  */
+import { clampMorale, MORALE } from './personalities';
 import type { SpiritId, TurnState, Unit } from './types';
 
 export type SpiritEffect =
@@ -15,6 +16,7 @@ export type SpiritEffect =
   | { t: 'move'; bonus: number }
   | { t: 'heal'; ratio: number }
   | { t: 'supply' }
+  | { t: 'morale'; amount: number }
   | { t: 'again' };
 
 export interface SpiritDef {
@@ -31,7 +33,7 @@ export const SPIRITS: Record<SpiritId, SpiritDef> = {
   fortitude: { id: 'fortitude', name: '불굴', cost: 15, desc: '다음에 맞는 공격 1회의 피해가 절반이 된다.', effect: { t: 'taken', mul: 0.5 } },
   ironwall: { id: 'ironwall', name: '철벽', cost: 35, desc: '다음에 맞는 공격 1회의 피해가 1/4이 된다.', effect: { t: 'taken', mul: 0.25 } },
   focus: { id: 'focus', name: '집중', cost: 20, desc: '내 다음 턴 시작까지 명중·회피 +30.', effect: { t: 'focus' } },
-  spirit: { id: 'spirit', name: '기합', cost: 25, desc: '다음 공격의 피해가 1.5배가 된다.', effect: { t: 'dealt', mul: 1.5 } },
+  spirit: { id: 'spirit', name: '기합', cost: 20, desc: '기력 +10.', effect: { t: 'morale', amount: 10 } },
   passion: { id: 'passion', name: '열혈', cost: 45, desc: '다음 공격의 피해가 2배가 된다.', effect: { t: 'dealt', mul: 2 } },
   haste: { id: 'haste', name: '신속', cost: 15, desc: '이번 턴 이동력 +3.', effect: { t: 'move', bonus: 3 } },
   insight: { id: 'insight', name: '간파', cost: 15, desc: '다음 공격은 상대의 지형 회피 보너스를 무시한다.', effect: { t: 'pierce' } },
@@ -90,6 +92,10 @@ export const EFFECTS: Handlers = {
     usable: (_e, c) =>
       c.unit.en < c.unit.def.en ||
       c.unit.ammo.some((a, i) => a !== null && a < (c.unit.def.weapons[i].ammo as number)),
+  },
+  morale: {
+    apply: (e, c) => void (c.unit.morale = clampMorale(c.unit.morale + e.amount)),
+    usable: (_e, c) => c.unit.morale < MORALE.max,
   },
   again: {
     apply: (_e, c) => {

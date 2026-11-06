@@ -8,7 +8,7 @@
  * 정신 커맨드는 "쓴 계획"과 "안 쓴 계획"의 점수 차이가 아껴 두는 값보다 클 때만 쓴다.
  */
 import { movesAfterAttack } from '../core/abilities';
-import { RULES } from '../core/data';
+import { GRID_H, GRID_W, RULES, TERRAINS } from '../core/data';
 import {
   calcStrike,
   defenseOptions,
@@ -33,9 +33,10 @@ import {
   foeUnit,
   moveRange,
 } from '../core/game';
-import { dist, keyPos, reachable, samePos } from '../core/map';
+import { dist, inBounds, keyPos, reachable, samePos, tileKey } from '../core/map';
+import { MORALE } from '../core/personalities';
 import { handlerOf, SPIRITS } from '../core/spirits';
-import type { Action, GameState, Pos, Side, SpiritId } from '../core/types';
+import type { Action, GameState, Pos, Side, SpiritId, Unit, WeaponDef } from '../core/types';
 
 export interface AiProfile {
   name: string;
@@ -56,6 +57,10 @@ export interface AiTuning {
   terminalHpWeight: number;
   /** EN 비율 차이의 비중 */
   enWeight: number;
+  /** 기력 차이 1점당 점수 */
+  moraleWeight: number;
+  /** 필살기를 쓸 수 있는 기력에 가까워진 정도(0~1)의 비중. 기력을 모으는 동기를 준다 */
+  finisherWeight: number;
   /** 다음 턴 공격 가능성(거리를 좁히는 동기)의 비중 */
   potentialWeight: number;
   /** 라운드가 갈수록 potentialWeight 가 커지는 속도(1 + round / 이 값) */
@@ -64,6 +69,10 @@ export interface AiTuning {
   potentialFalloff: number;
   /** 공격 없이 버틴 라운드마다 위험 가중치를 줄이는 속도(1 + idle / 이 값) */
   idleDecay: number;
+  /** 서로 안 때리고 버틴 라운드 하나당 공격 계획에 더해 주는 점수(교착 해소) */
+  idleAttackRate: number;
+  /** 그 보너스의 상한 */
+  idleAttackCap: number;
   /** 정신 커맨드 1 SP 당 아끼는 값 */
   spiritHoldRate: number;
   /** 체력이 바닥일 때도 남는 아끼는 값의 비율 */
@@ -82,10 +91,14 @@ export const DEFAULT_TUNING: AiTuning = {
   terminalScore: 3,
   terminalHpWeight: 0.5,
   enWeight: 0.06,
+  moraleWeight: 0.004,
+  finisherWeight: 0.08,
   potentialWeight: 0.35,
   potentialGrowth: 12,
   potentialFalloff: 8,
   idleDecay: 3,
+  idleAttackRate: 0.01,
+  idleAttackCap: 0.2,
   spiritHoldRate: 0.0045,
   spiritHoldHpFloor: 0.35,
   spiritHoldTimeFloor: 0.35,
@@ -112,10 +125,22 @@ interface Ctx {
   oppReach: Pos[];
   /** 내 무기별로, 지금 자리에서 한 번 맞혔을 때 상대 HP 를 얼마나 깎는가(비율) */
   eDmg: number[];
+  /** 무기별로, 각 칸에서 그 무기가 상대에게 닿는 자리까지 가는 이동 비용(지형 반영) */
+  fireCost: Map<number, number>[];
   riskCache: Map<string, number>;
   /** 디버깅용: 계획별 점수를 쌓는다 */
   trace?: string[];
 }
+
+/** 필살기(기력 제한 무기)를 쓸 수 있는 기력에 얼마나 가까운가. 무기마다 0~1 이고 합한다. */
+const finisherReadiness = (f: Fighter) =>
+  f.u.def.weapons.reduce(
+    (sum, w) =>
+      w.minMorale === undefined
+        ? sum
+        : sum + Math.min(1, Math.max(0, (f.morale - MORALE.base) / (w.minMorale - MORALE.base))),
+    0,
+  );
 
 export function staticEval(prof: AiProfile, m: Fighter, o: Fighter): number {
   const k = prof.tuning;
@@ -123,7 +148,13 @@ export function staticEval(prof: AiProfile, m: Fighter, o: Fighter): number {
   const or = o.hp / o.u.def.hp;
   if (o.hp <= 0) return k.terminalScore + mr * k.terminalHpWeight;
   if (m.hp <= 0) return -k.terminalScore + (1 - or) * k.terminalHpWeight;
-  return mr - prof.aggression * or + k.enWeight * (m.en / m.u.def.en - o.en / o.u.def.en);
+  return (
+    mr -
+    prof.aggression * or +
+    k.enWeight * (m.en / m.u.def.en - o.en / o.u.def.en) +
+    k.moraleWeight * (m.morale - o.morale) +
+    k.finisherWeight * (finisherReadiness(m) - finisherReadiness(o))
+  );
 }
 
 export function makeCtx(s: GameState, prof: AiProfile): Ctx {
@@ -143,14 +174,56 @@ export function makeCtx(s: GameState, prof: AiProfile): Ctx {
       const st = calcStrike(env, fm, fo, w, false, false);
       return (st.hit * st.dmg) / opp.def.hp;
     }),
+    fireCost: me.def.weapons.map((w) => costToFire(s, me, opp, w, effMaxRange(fm, w))),
     riskCache: new Map(),
   };
+}
+
+/**
+ * 각 칸에서 상대에게 무기가 닿는 자리까지 가는 데 드는 이동 비용.
+ * 거리만 보면 지형 때문에 못 가는 자리도 닿는다고 착각해 마지막 몇 칸을 좁히지 못하므로, 지형 비용을 반영한다.
+ */
+function costToFire(s: GameState, me: Unit, opp: Unit, w: WeaponDef, maxRange: number): Map<number, number> {
+  const air = me.def.moveClass === 'air';
+  const walkable = (x: number, y: number) =>
+    inBounds(x, y) && !(x === opp.pos.x && y === opp.pos.y) && (air || TERRAINS[s.grid[y][x]].groundPass);
+  const enter = (x: number, y: number) => (air ? 1 : TERRAINS[s.grid[y][x]].cost);
+  const best = new Map<number, number>();
+  const open: number[] = [];
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
+      const d = dist({ x, y }, opp.pos);
+      if (d < w.minRange || d > maxRange || !walkable(x, y)) continue;
+      best.set(tileKey(x, y), 0);
+      open.push(tileKey(x, y));
+    }
+  }
+  while (open.length > 0) {
+    let bi = 0;
+    for (let i = 1; i < open.length; i++) if (best.get(open[i])! < best.get(open[bi])!) bi = i;
+    const u = open.splice(bi, 1)[0];
+    const { x, y } = keyPos(u);
+    // n 에서 u 로 들어가는 비용 = u 칸의 진입 비용
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!walkable(nx, ny)) continue;
+      const nd = best.get(u)! + enter(x, y);
+      const nk = tileKey(nx, ny);
+      if (nd < (best.get(nk) ?? Infinity)) {
+        best.set(nk, nd);
+        if (!open.includes(nk)) open.push(nk);
+      }
+    }
+  }
+  return best;
 }
 
 const sig = (f: Fighter, maxHp: number, maxEn: number) =>
   [
     Math.floor((f.hp / maxHp) * 20),
     Math.floor((f.en / maxEn) * 6),
+    Math.floor(f.morale / 5),
     f.b.sure ? 1 : 0,
     f.b.flash ? 1 : 0,
     f.b.takenMul,
@@ -209,13 +282,22 @@ function postRisk(ctx: Ctx, S: GameState, m: Fighter, o: Fighter, leftover: numb
 
 /** 이 자리에서 다음 턴에 공격이 닿을 가능성(가까울수록 큼). 거리를 좁히는 동기를 준다. */
 function potential(ctx: Ctx, m: Fighter, o: Fighter): number {
+  void o;
   const k = ctx.prof.tuning;
-  const d = dist(m.pos, o.pos);
+  const here = tileKey(m.pos.x, m.pos.y);
   let best = 0;
   m.u.def.weapons.forEach((w, wi) => {
     if (!weaponReady(m, wi, false)) return;
-    const reach = effMaxRange(m, w) + (w.isP ? 0 : baseMove(m.u));
-    const v = d <= reach ? 1 : Math.max(0, 1 - (d - reach) / k.potentialFalloff);
+    const cost = ctx.fireCost[wi].get(here);
+    if (cost === undefined) return;
+    let v: number;
+    if (w.isP) {
+      // P무기는 움직이면 못 쏘므로, 지금 자리가 닿는 자리일 때만 온전히 친다.
+      v = cost === 0 ? 1 : 0.5 * Math.max(0, 1 - cost / k.potentialFalloff);
+    } else {
+      const budget = baseMove(m.u);
+      v = cost <= budget ? 1 : Math.max(0, 1 - (cost - budget) / k.potentialFalloff);
+    }
     best = Math.max(best, ctx.eDmg[wi] * v);
   });
   return best * k.potentialWeight * ctx.prof.aggression * (1 + ctx.s.round / k.potentialGrowth);
@@ -241,7 +323,9 @@ export function search(ctx: Ctx, S: GameState): Plan {
   const fm0 = fighterOf(me);
   const fo = fighterOf(foe);
   // 서로 안 때리고 버틴 라운드가 길어질수록 위험을 덜 따진다(교착 해소).
-  const kappa = ctx.prof.caution / (1 + (S.round - S.lastClash) / ctx.prof.tuning.idleDecay);
+  const idle = S.round - S.lastClash;
+  const kappa = ctx.prof.caution / (1 + idle / ctx.prof.tuning.idleDecay);
+  const idleBonus = Math.min(ctx.prof.tuning.idleAttackCap, idle * ctx.prof.tuning.idleAttackRate);
   const reach = moveRange(S);
   const acted = S.turn.acted;
 
@@ -278,6 +362,7 @@ export function search(ctx: Ctx, S: GameState): Plan {
         if (e < v) v = e;
       }
       ctx.trace?.push(`atk@(${pos.x},${pos.y}) w${wi} coarse=${v.toFixed(3)} riskNow=${riskNow.toFixed(3)}`);
+      v += idleBonus;
       attacks.push({ pos, moved: needsMove, wi, leftover, coarse: v });
     });
   }
@@ -296,6 +381,7 @@ export function search(ctx: Ctx, S: GameState): Plan {
       }
       if (e < v) v = e;
     }
+    v += idleBonus;
     if (v > best.value) best = { value: v, move: c.moved ? c.pos : null, weapon: c.wi };
   }
   return best;

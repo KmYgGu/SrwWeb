@@ -13,6 +13,7 @@ import {
   type StrikeEvent,
 } from './exchange';
 import { buildGrid, mapById } from './maps';
+import { MORALE } from './personalities';
 import { dist, reachable, samePos, tileKey, type ReachNode } from './map';
 import { handlerOf, SPIRITS, type EffectCtx } from './spirits';
 import type { Action, Buffs, GameState, Pos, RosterEntry, Side, SpiritId, Unit } from './types';
@@ -38,6 +39,7 @@ function newUnit(side: Side, entry: RosterEntry, spawn: Pos): Unit {
     sp: entry.pilot.sp,
     used: [],
     lastWeapon: null,
+    morale: MORALE.base,
     buffs: freshBuffs(),
   };
 }
@@ -166,11 +168,12 @@ export function applySpirit(s: GameState, id: SpiritId) {
 }
 
 /** 지금 위치에서 쓸 수 있는 무기 번호와 그 이유(UI 표시용) */
-export function weaponStatus(s: GameState, unit: Unit, wi: number): 'ok' | 'en' | 'ammo' | 'p' | 'range' {
+export function weaponStatus(s: GameState, unit: Unit, wi: number): 'ok' | 'en' | 'ammo' | 'morale' | 'p' | 'range' {
   const f = fighterOf(unit);
   const w = unit.def.weapons[wi];
   if (f.en < w.enCost) return 'en';
   if (w.ammo !== null && (f.ammo[wi] ?? 0) <= 0) return 'ammo';
+  if (f.morale < (w.minMorale ?? 0)) return 'morale';
   if (unit.side === s.turn.side && hasMoved(s) && w.isP) return 'p';
   const foe = s.units[1 - unit.side];
   return inRange(f, w, dist(unit.pos, foe.pos)) ? 'ok' : 'range';
@@ -187,6 +190,7 @@ function writeBack(u: Unit, f: Fighter) {
   u.hp = f.hp;
   u.en = f.en;
   u.ammo = f.ammo.slice();
+  u.morale = f.morale;
   u.buffs = { ...f.b };
 }
 

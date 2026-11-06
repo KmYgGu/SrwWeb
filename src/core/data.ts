@@ -1,3 +1,4 @@
+import { MORALE } from './personalities';
 import type { Grade, RosterEntry, TerrainDef, TerrainId } from './types';
 
 export const GRID_W = 9;
@@ -21,12 +22,14 @@ export const GRADE: Record<Grade, { dmg: number; hit: number; eva: number }> = {
 
 export const RULES = {
   minDamage: 150,
-  /** 기량 차이가 이만큼 이상이면 추가 공격 */
-  followGap: 20,
+  /** 기력 차이가 이만큼 이상이면 추가 공격 */
+  followGap: 30,
   evadeHitMul: 0.5,
   guardDmgMul: 0.5,
   focusBonus: 30,
-  skillWeight: 0.4,
+  /** 능력치의 기준값(100). 반응이 이보다 높을수록 잘 피한다 */
+  statBase: 100,
+  reactWeight: 0.4,
   mobilityWeight: 0.25,
   hitMin: 5,
   hitMax: 100,
@@ -62,7 +65,7 @@ export const ROSTER: RosterEntry[] = [
       weapons: [
         { name: '버스트 발칸', kind: 'shoot', power: 2400, minRange: 1, maxRange: 3, accuracy: 85, enCost: 0, ammo: 20, isP: false },
         { name: '하이퍼 소드', kind: 'melee', power: 5400, minRange: 1, maxRange: 1, accuracy: 90, enCost: 6, ammo: null, isP: false },
-        { name: '파괴 드라이브', kind: 'melee', power: 9300, minRange: 1, maxRange: 1, accuracy: 80, enCost: 40, ammo: null, isP: true },
+        { name: '파괴 드라이브', kind: 'melee', power: 9300, minRange: 1, maxRange: 1, accuracy: 80, enCost: 40, ammo: null, isP: true, minMorale: MORALE.finisher },
       ],
     },
     pilot: {
@@ -70,7 +73,7 @@ export const ROSTER: RosterEntry[] = [
       name: '류진',
       melee: 145,
       shoot: 90,
-      skill: 100,
+      personality: 'superBold',
       react: 100,
       defense: 95,
       sp: 110,
@@ -94,7 +97,7 @@ export const ROSTER: RosterEntry[] = [
       adapt: ALL_GROUND('A', 'A', 'B', 'B'),
       weapons: [
         { name: '빔 라이플', kind: 'shoot', power: 3600, minRange: 2, maxRange: 5, accuracy: 90, enCost: 4, ammo: null, isP: false },
-        { name: '롱 레인지 캐논', kind: 'shoot', power: 7200, minRange: 3, maxRange: 7, accuracy: 80, enCost: 35, ammo: null, isP: true },
+        { name: '롱 레인지 캐논', kind: 'shoot', power: 7200, minRange: 3, maxRange: 7, accuracy: 80, enCost: 35, ammo: null, isP: true, minMorale: MORALE.finisher },
         { name: '빔 나이프', kind: 'melee', power: 2700, minRange: 1, maxRange: 1, accuracy: 85, enCost: 0, ammo: 12, isP: false },
       ],
     },
@@ -103,11 +106,11 @@ export const ROSTER: RosterEntry[] = [
       name: '세라',
       melee: 85,
       shoot: 150,
-      skill: 100,
+      personality: 'cool',
       react: 115,
       defense: 80,
       sp: 110,
-      spirits: ['sure', 'flash', 'focus', 'haste', 'insight', 'supply'],
+      spirits: ['sure', 'flash', 'focus', 'haste', 'spirit', 'supply'],
       abilities: ['sniper', 'hitAway'],
     },
   },
@@ -128,7 +131,7 @@ export const ROSTER: RosterEntry[] = [
       weapons: [
         { name: '미사일 포드', kind: 'shoot', power: 2700, minRange: 2, maxRange: 4, accuracy: 85, enCost: 0, ammo: 12, isP: false },
         { name: '플라즈마 건', kind: 'shoot', power: 4000, minRange: 1, maxRange: 4, accuracy: 88, enCost: 10, ammo: null, isP: false },
-        { name: '초음속 슬래시', kind: 'melee', power: 5700, minRange: 1, maxRange: 1, accuracy: 85, enCost: 20, ammo: null, isP: true },
+        { name: '초음속 슬래시', kind: 'melee', power: 5700, minRange: 1, maxRange: 1, accuracy: 85, enCost: 20, ammo: null, isP: true, minMorale: MORALE.finisher },
       ],
     },
     pilot: {
@@ -136,7 +139,7 @@ export const ROSTER: RosterEntry[] = [
       name: '카이',
       melee: 115,
       shoot: 120,
-      skill: 100,
+      personality: 'cautious',
       react: 140,
       defense: 70,
       sp: 120,
@@ -162,7 +165,7 @@ export const ROSTER: RosterEntry[] = [
         { name: '유도 미사일', kind: 'shoot', power: 3000, minRange: 2, maxRange: 6, accuracy: 80, enCost: 0, ammo: 10, isP: false },
         { name: '광자포', kind: 'shoot', power: 6300, minRange: 1, maxRange: 5, accuracy: 85, enCost: 30, ammo: null, isP: false },
         { name: '건틀릿', kind: 'melee', power: 4500, minRange: 1, maxRange: 1, accuracy: 85, enCost: 0, ammo: null, isP: false },
-        { name: '대형 캐논', kind: 'shoot', power: 9300, minRange: 2, maxRange: 6, accuracy: 80, enCost: 50, ammo: null, isP: true },
+        { name: '대형 캐논', kind: 'shoot', power: 9300, minRange: 2, maxRange: 6, accuracy: 80, enCost: 50, ammo: null, isP: true, minMorale: MORALE.finisher },
       ],
     },
     pilot: {
@@ -170,7 +173,7 @@ export const ROSTER: RosterEntry[] = [
       name: '도윤',
       melee: 110,
       shoot: 125,
-      skill: 100,
+      personality: 'bold',
       react: 85,
       defense: 140,
       sp: 110,

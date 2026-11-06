@@ -14,7 +14,7 @@ while (s.winner === null && guard++ < 400) {
   const acts = decide(s, prof);
   const [u0, u1] = s.units;
   console.log(
-    `R${s.round} P${side} | ${u0.def.name}(${u0.pos.x},${u0.pos.y}) hp${u0.hp} en${u0.en} sp${u0.sp} | ${u1.def.name}(${u1.pos.x},${u1.pos.y}) hp${u1.hp} en${u1.en} sp${u1.sp} -> ` +
+    `R${s.round} P${side} | ${u0.def.name}(${u0.pos.x},${u0.pos.y}) hp${u0.hp} en${u0.en} sp${u0.sp} m${u0.morale} | ${u1.def.name}(${u1.pos.x},${u1.pos.y}) hp${u1.hp} en${u1.en} sp${u1.sp} m${u1.morale} -> ` +
       acts.map((x) => (x.type === 'move' ? `move(${x.to.x},${x.to.y})` : x.type === 'attack' ? `atk:${s.units[side].def.weapons[x.weapon].name}` : x.type === 'spirit' ? `sp:${x.id}` : 'wait')).join(' '),
   );
   const before = s.log.length;

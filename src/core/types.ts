@@ -37,6 +37,8 @@ export interface WeaponDef {
   ammo: number | null;
   /** P무기: 이동한 뒤에는 공격할 수 없다(반격에는 쓸 수 있다) */
   isP: boolean;
+  /** 이 기력 이상일 때만 쓸 수 있다(필살기) */
+  minMorale?: number;
 }
 
 export interface UnitDef {
@@ -52,6 +54,8 @@ export interface UnitDef {
   adapt: Record<AdaptKey, Grade>;
   weapons: WeaponDef[];
 }
+
+export type PersonalityId = 'superBold' | 'bold' | 'normal' | 'cautious' | 'cool';
 
 export type AbilityId =
   | 'counter'
@@ -82,12 +86,12 @@ export interface PilotDef {
   name: string;
   melee: number;
   shoot: number;
-  /** 기량: 명중, 추격 판정 */
-  skill: number;
   /** 반응: 회피 */
   react: number;
   defense: number;
   sp: number;
+  /** 성격: 기력이 오르내리는 방식 */
+  personality: PersonalityId;
   spirits: SpiritId[];
   abilities: AbilityId[];
 }
@@ -128,6 +132,8 @@ export interface Unit {
   used: SpiritId[];
   /** 가장 최근에 쓴 무기 번호(공격이든 반격이든). 아직 없으면 null */
   lastWeapon: number | null;
+  /** 기력. 전투 중에만 변한다 */
+  morale: number;
   buffs: Buffs;
 }
 
