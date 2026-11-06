@@ -1,11 +1,4 @@
-import type {
-  AbilityId,
-  Grade,
-  RosterEntry,
-  SpiritId,
-  TerrainDef,
-  TerrainId,
-} from './types';
+import type { Grade, RosterEntry, TerrainDef, TerrainId } from './types';
 
 export const GRID_W = 9;
 export const GRID_H = 13;
@@ -40,62 +33,6 @@ export const RULES = {
   /** 공격하지 않고 턴을 마치면 회복되는 EN */
   waitEn: 12,
   turnLimit: 30,
-};
-
-export const ABILITY_TUNING = {
-  bunshin: { chance: 0.4, en: 10 },
-  /** 방어력/200 이 발동 확률 */
-  shield: { reduce: 1500 },
-  barrier: { threshold: 1500, en: 5 },
-  sniperRange: 1,
-  regen: { hpRatio: 0.04, en: 10 },
-  agileMove: 1,
-};
-
-export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
-  counter: { name: '카운터', desc: '반격을 선택하면 상대보다 먼저 공격한다.' },
-  hitAway: { name: '히트&어웨이', desc: '공격한 뒤에도 남은 이동력만큼 이동할 수 있다.' },
-  bunshin: { name: '분신', desc: `명중한 공격을 ${ABILITY_TUNING.bunshin.chance * 100}% 확률로 무효화한다. EN ${ABILITY_TUNING.bunshin.en} 소비.` },
-  shield: { name: '실드 방어', desc: `피격 시 방어력에 비례한 확률로 피해를 ${ABILITY_TUNING.shield.reduce} 줄인다.` },
-  barrier: { name: '배리어', desc: `${ABILITY_TUNING.barrier.threshold} 이하의 피해를 무효화한다. EN ${ABILITY_TUNING.barrier.en} 소비.` },
-  sniper: { name: '저격', desc: `사격 무기(P무기 제외)의 사거리 +${ABILITY_TUNING.sniperRange}.` },
-  regen: { name: '재생', desc: `턴 시작 시 HP ${ABILITY_TUNING.regen.hpRatio * 100}%, EN ${ABILITY_TUNING.regen.en} 회복.` },
-  agile: { name: '기동 강화', desc: `이동력 +${ABILITY_TUNING.agileMove}.` },
-};
-
-export type SpiritEffect =
-  | { t: 'sure' }
-  | { t: 'flash' }
-  | { t: 'taken'; mul: number }
-  | { t: 'dealt'; mul: number }
-  | { t: 'focus' }
-  | { t: 'pierce' }
-  | { t: 'move'; bonus: number }
-  | { t: 'heal'; ratio: number }
-  | { t: 'supply' }
-  | { t: 'again' };
-
-export interface SpiritDef {
-  id: SpiritId;
-  name: string;
-  cost: number;
-  desc: string;
-  effect: SpiritEffect;
-}
-
-export const SPIRITS: Record<SpiritId, SpiritDef> = {
-  sure: { id: 'sure', name: '필중', cost: 20, desc: '다음 공격이 반드시 명중한다.', effect: { t: 'sure' } },
-  flash: { id: 'flash', name: '섬광', cost: 25, desc: '다음에 맞는 공격 1회를 반드시 피한다.', effect: { t: 'flash' } },
-  fortitude: { id: 'fortitude', name: '불굴', cost: 15, desc: '다음에 맞는 공격 1회의 피해가 절반이 된다.', effect: { t: 'taken', mul: 0.5 } },
-  ironwall: { id: 'ironwall', name: '철벽', cost: 35, desc: '다음에 맞는 공격 1회의 피해가 1/4이 된다.', effect: { t: 'taken', mul: 0.25 } },
-  focus: { id: 'focus', name: '집중', cost: 20, desc: '내 다음 턴 시작까지 명중·회피 +30.', effect: { t: 'focus' } },
-  spirit: { id: 'spirit', name: '기합', cost: 25, desc: '다음 공격의 피해가 1.5배가 된다.', effect: { t: 'dealt', mul: 1.5 } },
-  passion: { id: 'passion', name: '열혈', cost: 45, desc: '다음 공격의 피해가 2배가 된다.', effect: { t: 'dealt', mul: 2 } },
-  haste: { id: 'haste', name: '신속', cost: 15, desc: '이번 턴 이동력 +3.', effect: { t: 'move', bonus: 3 } },
-  insight: { id: 'insight', name: '간파', cost: 15, desc: '다음 공격은 상대의 지형 회피 보너스를 무시한다.', effect: { t: 'pierce' } },
-  repair: { id: 'repair', name: '수복', cost: 40, desc: 'HP를 30% 회복한다.', effect: { t: 'heal', ratio: 0.3 } },
-  supply: { id: 'supply', name: '보급', cost: 30, desc: 'EN과 탄수를 모두 채운다.', effect: { t: 'supply' } },
-  again: { id: 'again', name: '재동', cost: 50, desc: '행동한 뒤에 쓰면 한 번 더 행동한다.', effect: { t: 'again' } },
 };
 
 const ALL_GROUND = (plain: Grade, forest: Grade, mountain: Grade, city: Grade, sea: Grade = 'D') => ({

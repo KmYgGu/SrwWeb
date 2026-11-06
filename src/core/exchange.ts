@@ -3,7 +3,8 @@
  * 실제 전투(sampleExchange)와 AI의 기대값 계산(exchangeLeaves)이 같은 strikeBranches 를 쓰므로
  * 규칙이 두 군데로 갈라지지 않는다.
  */
-import { ABILITY_TUNING, GRADE, RULES, TERRAINS } from './data';
+import { rangeBonusOf, reactionsOf, strikesFirstOnCounter } from './abilities';
+import { GRADE, RULES, TERRAINS } from './data';
 import { dist } from './map';
 import type { AbilityId, Buffs, Pos, TerrainId, Unit, WeaponDef } from './types';
 
@@ -42,9 +43,12 @@ export interface StrikeEvent {
   by: 0 | 1;
   tag: StrikeTag;
   weapon: string;
-  result: 'miss' | 'flash' | 'bunshin' | 'barrier' | 'hit';
+  result: 'miss' | 'flash' | 'negated' | 'hit';
   dmg: number;
-  shield: boolean;
+  /** result 가 negated 일 때 무효화한 능력 */
+  ability?: AbilityId;
+  /** 피해를 깎은 능력(실드 방어 등) */
+  reducedBy?: AbilityId;
 }
 
 export interface Leaf {
@@ -56,12 +60,7 @@ export interface Leaf {
   events: StrikeEvent[];
 }
 
-export const hasAbility = (f: Fighter, id: AbilityId) => f.u.pilot.abilities.includes(id);
-
-export function effMaxRange(f: Fighter, w: WeaponDef): number {
-  const sniper = w.kind === 'shoot' && !w.isP && hasAbility(f, 'sniper');
-  return w.maxRange + (sniper ? ABILITY_TUNING.sniperRange : 0);
-}
+export const effMaxRange = (f: Fighter, w: WeaponDef): number => w.maxRange + rangeBonusOf(f.u.pilot, w);
 
 export const inRange = (f: Fighter, w: WeaponDef, d: number) =>
   d >= w.minRange && d <= effMaxRange(f, w);
@@ -170,7 +169,7 @@ interface Branch {
 function buildSteps(atk: Fighter, def: Fighter, wi: number, choice: DefenseChoice): Step[] {
   const steps: Step[] = [];
   const cw = choice.kind === 'counter' ? choice.weapon : -1;
-  const counterFirst = cw >= 0 && hasAbility(def, 'counter');
+  const counterFirst = cw >= 0 && strikesFirstOnCounter(def.u.pilot);
   if (counterFirst) steps.push({ by: 1, weapon: cw, tag: 'counter' });
   steps.push({ by: 0, weapon: wi, tag: 'main' });
   if (cw >= 0 && !counterFirst) steps.push({ by: 1, weapon: cw, tag: 'counter' });
@@ -208,54 +207,57 @@ function strikeBranches(env: Env, x: X, step: Step, choice: DefenseChoice, rec: 
       ? { ...S, b: { ...S.b, sure: false, pierce: false, dealtMul: 1 } }
       : S;
 
-  const make = (
-    p: number,
-    T: Fighter,
-    result: StrikeEvent['result'],
-    dmg: number,
-    shield = false,
-  ): Branch => {
+  const make = (p: number, T: Fighter, info: Pick<StrikeEvent, 'result' | 'dmg' | 'ability' | 'reducedBy'>): Branch => {
     const f: [Fighter, Fighter] = [x.f[0], x.f[1]];
     f[s] = Sd;
     f[t] = T;
     const did: [boolean, boolean] = [x.did[0], x.did[1]];
     did[s] = true;
-    const ev = rec ? [...x.ev, { by: s, tag: step.tag, weapon: w.name, result, dmg, shield }] : x.ev;
+    const ev = rec ? [...x.ev, { by: s, tag: step.tag, weapon: w.name, ...info }] : x.ev;
     return { p, x: { f, did, ev } };
   };
 
-  if (st.flash) return [make(1, { ...T0, b: { ...T0.b, flash: false } }, 'flash', 0)];
+  if (st.flash) return [make(1, { ...T0, b: { ...T0.b, flash: false } }, { result: 'flash', dmg: 0 })];
 
   const out: Branch[] = [];
-  if (st.hit < 1) out.push(make(1 - st.hit, T0, 'miss', 0));
+  if (st.hit < 1) out.push(make(1 - st.hit, T0, { result: 'miss', dmg: 0 }));
   if (st.hit <= 0) return out;
 
+  const pilot = T0.u.pilot;
   let pRem = st.hit;
-  if (hasAbility(T0, 'bunshin') && T0.en >= ABILITY_TUNING.bunshin.en) {
-    const pb = pRem * ABILITY_TUNING.bunshin.chance;
-    out.push(make(pb, { ...T0, en: T0.en - ABILITY_TUNING.bunshin.en }, 'bunshin', 0));
-    pRem -= pb;
+
+  // 확률로 무효화(분신 등). 막지 못한 쪽은 EN 을 쓰지 않는다.
+  for (const r of reactionsOf(pilot, 'dodge')) {
+    if (T0.en < r.def.en) continue;
+    const pn = pRem * r.def.chance;
+    out.push(make(pn, { ...T0, en: T0.en - r.def.en }, { result: 'negated', dmg: 0, ability: r.id }));
+    pRem -= pn;
   }
 
   let d = st.dmg;
   if (T0.b.takenMul !== 1) d = Math.max(RULES.minDamage, Math.round(d * T0.b.takenMul));
 
-  const bar = ABILITY_TUNING.barrier;
-  if (hasAbility(T0, 'barrier') && d <= bar.threshold && T0.en >= bar.en) {
-    out.push(make(pRem, { ...T0, en: T0.en - bar.en }, 'barrier', 0));
-    return out;
+  // 기준 이하 피해 무효화(배리어 등). 막으면 정신 커맨드의 피격 배율은 쓰이지 않은 채 남는다.
+  for (const r of reactionsOf(pilot, 'absorb')) {
+    if (d <= r.def.threshold && T0.en >= r.def.en) {
+      out.push(make(pRem, { ...T0, en: T0.en - r.def.en }, { result: 'negated', dmg: 0, ability: r.id }));
+      return out;
+    }
   }
 
+  // 확률로 피해 감소(실드 방어 등)
+  let cases: { p: number; dmg: number; by?: AbilityId }[] = [{ p: pRem, dmg: d }];
+  for (const r of reactionsOf(pilot, 'reduce')) {
+    const c = r.def.chance(pilot);
+    if (c <= 0) continue;
+    cases = cases.flatMap((k) => [
+      { p: k.p * c, dmg: Math.max(RULES.minDamage, k.dmg - r.def.amount), by: r.id },
+      { p: k.p * (1 - c), dmg: k.dmg, by: k.by },
+    ]);
+  }
   const landed: Fighter = { ...T0, b: T0.b.takenMul !== 1 ? { ...T0.b, takenMul: 1 } : T0.b };
-  const land = (dmg: number, p: number, shield: boolean) =>
-    out.push(make(p, { ...landed, hp: Math.max(0, T0.hp - dmg) }, 'hit', dmg, shield));
-
-  const pShield = hasAbility(T0, 'shield') ? T0.u.pilot.defense / 200 : 0;
-  if (pShield > 0) {
-    land(Math.max(RULES.minDamage, d - ABILITY_TUNING.shield.reduce), pRem * pShield, true);
-    land(d, pRem * (1 - pShield), false);
-  } else {
-    land(d, pRem, false);
+  for (const k of cases) {
+    out.push(make(k.p, { ...landed, hp: Math.max(0, T0.hp - k.dmg) }, { result: 'hit', dmg: k.dmg, reducedBy: k.by }));
   }
   return out;
 }

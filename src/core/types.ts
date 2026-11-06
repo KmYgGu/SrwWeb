@@ -140,6 +140,7 @@ export interface TurnState {
 }
 
 export interface GameState {
+  mapId: string;
   grid: TerrainId[][];
   units: [Unit, Unit];
   turn: TurnState;

@@ -1,38 +1,6 @@
 import { GRID_H, GRID_W, TERRAINS } from './data';
 import type { MoveClass, Pos, TerrainDef, TerrainId } from './types';
 
-/** 위쪽 7줄만 적고 나머지는 180도 회전해서 만든다. 어느 쪽에서 시작해도 불리하지 않다. */
-const TOP_HALF = [
-  '..f...m..',
-  '.c..f....',
-  'f..mm..c.',
-  '..~~..f..',
-  '.m.~.f..c',
-  '.......f.',
-  'f..~~~..f',
-];
-
-const CHAR_TERRAIN: Record<string, TerrainId> = {
-  '.': 'plain',
-  f: 'forest',
-  m: 'mountain',
-  c: 'city',
-  '~': 'sea',
-};
-
-export function buildGrid(): TerrainId[][] {
-  const rows = [...TOP_HALF];
-  for (let i = TOP_HALF.length - 2; i >= 0; i--) {
-    rows.push([...TOP_HALF[i]].reverse().join(''));
-  }
-  return rows.map((r) => [...r].map((ch) => CHAR_TERRAIN[ch]));
-}
-
-export const SPAWNS: [Pos, Pos] = [
-  { x: 4, y: 11 },
-  { x: 4, y: 1 },
-];
-
 export const tileKey = (x: number, y: number) => y * GRID_W + x;
 export const keyPos = (k: number): Pos => ({ x: k % GRID_W, y: Math.floor(k / GRID_W) });
 export const dist = (a: Pos, b: Pos) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);

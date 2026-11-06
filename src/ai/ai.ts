@@ -7,7 +7,8 @@
  * 을 합쳐 고른다. 상대의 방어 선택은 내 점수를 가장 깎는 쪽으로 가정한다.
  * 정신 커맨드는 "쓴 계획"과 "안 쓴 계획"의 점수 차이가 아껴 두는 값보다 클 때만 쓴다.
  */
-import { RULES, SPIRITS } from '../core/data';
+import { movesAfterAttack } from '../core/abilities';
+import { RULES } from '../core/data';
 import {
   calcStrike,
   defenseOptions,
@@ -16,7 +17,6 @@ import {
   fighterOf,
   gradeOf,
   groundBonus,
-  hasAbility,
   inRange,
   weaponReady,
   type DefenseChoice,
@@ -34,6 +34,7 @@ import {
   moveRange,
 } from '../core/game';
 import { dist, keyPos, reachable, samePos } from '../core/map';
+import { handlerOf, SPIRITS } from '../core/spirits';
 import type { Action, GameState, Pos, Side, SpiritId } from '../core/types';
 
 export interface AiProfile {
@@ -44,13 +45,63 @@ export interface AiProfile {
   caution: number;
   /** 정신 커맨드를 얼마나 아끼는가 */
   thrift: number;
+  /** 점수 함수의 세부. 성향이 아니라 AI 의 눈금이다. */
+  tuning: AiTuning;
 }
 
-export const PROFILES: Record<string, AiProfile> = {
-  balanced: { name: '균형형', aggression: 1, caution: 1, thrift: 1 },
-  hunter: { name: '공격형', aggression: 1.3, caution: 0.65, thrift: 0.8 },
-  careful: { name: '신중형', aggression: 0.9, caution: 1.4, thrift: 1.15 },
+export interface AiTuning {
+  /** 승패가 갈렸을 때의 점수 크기 */
+  terminalScore: number;
+  /** 승패가 갈렸을 때 남은 체력(또는 준 피해)이 더하는 비중 */
+  terminalHpWeight: number;
+  /** EN 비율 차이의 비중 */
+  enWeight: number;
+  /** 다음 턴 공격 가능성(거리를 좁히는 동기)의 비중 */
+  potentialWeight: number;
+  /** 라운드가 갈수록 potentialWeight 가 커지는 속도(1 + round / 이 값) */
+  potentialGrowth: number;
+  /** 공격이 닿는 거리를 벗어났을 때 가능성이 0 이 되기까지의 칸 수 */
+  potentialFalloff: number;
+  /** 공격 없이 버틴 라운드마다 위험 가중치를 줄이는 속도(1 + idle / 이 값) */
+  idleDecay: number;
+  /** 정신 커맨드 1 SP 당 아끼는 값 */
+  spiritHoldRate: number;
+  /** 체력이 바닥일 때도 남는 아끼는 값의 비율 */
+  spiritHoldHpFloor: number;
+  /** 시간이 흘러도 남는 아끼는 값의 최소 비율 */
+  spiritHoldTimeFloor: number;
+  /** 한 턴에 연달아 고려하는 정신 커맨드 수 */
+  spiritRounds: number;
+  /** 결과마다 위험도를 다시 계산하는 상위 공격 후보 수 */
+  refineTop: number;
+  /** 위험 계산에서 상대의 무기마다 살펴보는 자리 수 */
+  riskCandidates: number;
+}
+
+export const DEFAULT_TUNING: AiTuning = {
+  terminalScore: 3,
+  terminalHpWeight: 0.5,
+  enWeight: 0.06,
+  potentialWeight: 0.35,
+  potentialGrowth: 12,
+  potentialFalloff: 8,
+  idleDecay: 3,
+  spiritHoldRate: 0.0045,
+  spiritHoldHpFloor: 0.35,
+  spiritHoldTimeFloor: 0.35,
+  spiritRounds: 4,
+  refineTop: 6,
+  riskCandidates: 4,
 };
+
+export const PROFILES: Record<string, AiProfile> = {
+  balanced: { name: '균형형', aggression: 1, caution: 1, thrift: 1, tuning: DEFAULT_TUNING },
+  hunter: { name: '공격형', aggression: 1.3, caution: 0.65, thrift: 0.8, tuning: DEFAULT_TUNING },
+  careful: { name: '신중형', aggression: 0.9, caution: 1.4, thrift: 1.15, tuning: DEFAULT_TUNING },
+};
+
+/** 상대가 설 자리를 고를 때 후보를 줄이는 기준(지형이 좋은 자리, 멀리서 쏘는 자리 우선) */
+const CANDIDATE_RANK = { armor: 100, grade: 10, distance: 0.1 };
 
 interface Ctx {
   s: GameState;
@@ -67,11 +118,12 @@ interface Ctx {
 }
 
 export function staticEval(prof: AiProfile, m: Fighter, o: Fighter): number {
+  const k = prof.tuning;
   const mr = m.hp / m.u.def.hp;
   const or = o.hp / o.u.def.hp;
-  if (o.hp <= 0) return 3 + mr * 0.5;
-  if (m.hp <= 0) return -3 + (1 - or) * 0.5;
-  return mr - prof.aggression * or + 0.06 * (m.en / m.u.def.en - o.en / o.u.def.en);
+  if (o.hp <= 0) return k.terminalScore + mr * k.terminalHpWeight;
+  if (m.hp <= 0) return -k.terminalScore + (1 - or) * k.terminalHpWeight;
+  return mr - prof.aggression * or + k.enWeight * (m.en / m.u.def.en - o.en / o.u.def.en);
 }
 
 export function makeCtx(s: GameState, prof: AiProfile): Ctx {
@@ -127,10 +179,10 @@ export function riskOf(ctx: Ctx, m: Fighter, o: Fighter): number {
       if (w.isP && !samePos(U, o.pos)) continue;
       const at = { ...o, pos: U };
       const gb = groundBonus(ctx.env, at);
-      cands.push({ pos: U, rank: gb.eva + gb.armor * 100 + gradeOf(ctx.env, at).dmg * 10 + dist(U, m.pos) * 0.1 });
+      cands.push({ pos: U, rank: gb.eva + gb.armor * CANDIDATE_RANK.armor + gradeOf(ctx.env, at).dmg * CANDIDATE_RANK.grade + dist(U, m.pos) * CANDIDATE_RANK.distance });
     }
     cands.sort((a, b) => b.rank - a.rank);
-    for (const c of cands.slice(0, 4)) {
+    for (const c of cands.slice(0, ctx.prof.tuning.riskCandidates)) {
       const O = { ...o, pos: c.pos };
       let val = -Infinity;
       for (const d of defenseOptions(m, O)) {
@@ -148,7 +200,7 @@ export function riskOf(ctx: Ctx, m: Fighter, o: Fighter): number {
 
 /** 공격 후 이동(히트&어웨이)이 있으면 남은 이동력으로 닿는 칸 중 가장 안전한 곳 기준 */
 function postRisk(ctx: Ctx, S: GameState, m: Fighter, o: Fighter, leftover: number): number {
-  if (!hasAbility(m, 'hitAway') || leftover <= 0) return riskOf(ctx, m, o);
+  if (!movesAfterAttack(m.u.pilot) || leftover <= 0) return riskOf(ctx, m, o);
   let best = Infinity;
   const reach = reachable(S.grid, m.u.def.moveClass, m.pos, leftover, o.pos);
   for (const k of reach.keys()) best = Math.min(best, riskOf(ctx, { ...m, pos: keyPos(k) }, o));
@@ -157,15 +209,16 @@ function postRisk(ctx: Ctx, S: GameState, m: Fighter, o: Fighter, leftover: numb
 
 /** 이 자리에서 다음 턴에 공격이 닿을 가능성(가까울수록 큼). 거리를 좁히는 동기를 준다. */
 function potential(ctx: Ctx, m: Fighter, o: Fighter): number {
+  const k = ctx.prof.tuning;
   const d = dist(m.pos, o.pos);
   let best = 0;
   m.u.def.weapons.forEach((w, wi) => {
     if (!weaponReady(m, wi, false)) return;
     const reach = effMaxRange(m, w) + (w.isP ? 0 : baseMove(m.u));
-    const v = d <= reach ? 1 : Math.max(0, 1 - (d - reach) / 8);
+    const v = d <= reach ? 1 : Math.max(0, 1 - (d - reach) / k.potentialFalloff);
     best = Math.max(best, ctx.eDmg[wi] * v);
   });
-  return best * 0.35 * ctx.prof.aggression * (1 + ctx.s.round / 12);
+  return best * k.potentialWeight * ctx.prof.aggression * (1 + ctx.s.round / k.potentialGrowth);
 }
 
 interface Plan {
@@ -188,7 +241,7 @@ export function search(ctx: Ctx, S: GameState): Plan {
   const fm0 = fighterOf(me);
   const fo = fighterOf(foe);
   // 서로 안 때리고 버틴 라운드가 길어질수록 위험을 덜 따진다(교착 해소).
-  const kappa = ctx.prof.caution / (1 + (S.round - S.lastClash) / 3);
+  const kappa = ctx.prof.caution / (1 + (S.round - S.lastClash) / ctx.prof.tuning.idleDecay);
   const reach = moveRange(S);
   const acted = S.turn.acted;
 
@@ -228,7 +281,7 @@ export function search(ctx: Ctx, S: GameState): Plan {
 
   // 상위 후보만 결과마다 정확한 위험도로 다시 계산한다.
   attacks.sort((a, b) => b.coarse - a.coarse);
-  for (const c of attacks.slice(0, 6)) {
+  for (const c of attacks.slice(0, ctx.prof.tuning.refineTop)) {
     const fm: Fighter = { ...fm0, pos: c.pos };
     let v = Infinity;
     for (const def of defenseOptions(fo, fm)) {
@@ -247,25 +300,24 @@ export function search(ctx: Ctx, S: GameState): Plan {
 
 /** 정신 커맨드를 아껴 둘 때의 값. 체력이 줄거나 시간이 흐를수록 싸진다. */
 function holdCost(ctx: Ctx, S: GameState, id: SpiritId): number {
+  const k = ctx.prof.tuning;
   const me = activeUnit(S);
+  const def = SPIRITS[id];
   const hpRatio = me.hp / me.def.hp;
-  const timeFactor = Math.max(0.35, 1 - S.round / RULES.turnLimit);
-  let hold = SPIRITS[id].cost * 0.0045 * ctx.prof.thrift * (0.35 + 0.65 * hpRatio) * timeFactor;
-  const e = SPIRITS[id].effect;
-  // 회복은 덜 닳았을 때 쓰면 낭비라서, 실제로 채워지는 비율만큼 아끼는 값이 올라간다.
-  if (e.t === 'heal') hold *= Math.min(3, e.ratio / Math.max(0.05, Math.min(e.ratio, 1 - hpRatio)));
-  return hold;
+  const timeFactor = Math.max(k.spiritHoldTimeFloor, 1 - S.round / RULES.turnLimit);
+  const hold =
+    def.cost * k.spiritHoldRate * ctx.prof.thrift * (k.spiritHoldHpFloor + (1 - k.spiritHoldHpFloor) * hpRatio) * timeFactor;
+  return hold * (handlerOf(def.effect).holdScale?.(def.effect, me) ?? 1);
 }
-
-const OFFENSIVE: SpiritId[] = ['sure', 'spirit', 'passion', 'insight'];
 
 function spiritCandidates(S: GameState): SpiritId[] {
   const u = activeUnit(S);
   return u.pilot.spirits.filter((id) => {
     if (!castable(S, id)) return false;
-    if (S.turn.acted && OFFENSIVE.includes(id)) return false;
-    if (id === 'repair' && u.hp / u.def.hp > 0.85) return false;
-    return true;
+    const e = SPIRITS[id].effect;
+    const h = handlerOf(e);
+    if (S.turn.acted && h.beforeActionOnly) return false;
+    return h.worthCasting?.(e, u) ?? true;
   });
 }
 
@@ -276,7 +328,7 @@ export function decide(s: GameState, prof: AiProfile): Action[] {
   let plan = search(ctx, cur);
   const spirits: SpiritId[] = [];
 
-  for (let round = 0; round < 4; round++) {
+  for (let round = 0; round < prof.tuning.spiritRounds; round++) {
     let pick: { id: SpiritId; plan: Plan; state: GameState; gain: number } | null = null;
     for (const id of spiritCandidates(cur)) {
       const next = cloneState(cur);

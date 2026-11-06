@@ -1,9 +1,9 @@
-import { ABILITY_TUNING, RULES, SPIRITS } from './data';
+import { ABILITIES, moveBonusOf, movesAfterAttack, turnStartOf } from './abilities';
+import { RULES } from './data';
 import {
   counterWeapons,
   defenseOptions,
   fighterOf,
-  hasAbility,
   inRange,
   sampleExchange,
   weaponReady,
@@ -12,8 +12,10 @@ import {
   type Fighter,
   type StrikeEvent,
 } from './exchange';
-import { buildGrid, dist, reachable, samePos, SPAWNS, tileKey, type ReachNode } from './map';
-import type { Action, Buffs, GameState, RosterEntry, Side, SpiritId, Unit } from './types';
+import { buildGrid, mapById } from './maps';
+import { dist, reachable, samePos, tileKey, type ReachNode } from './map';
+import { handlerOf, SPIRITS, type EffectCtx } from './spirits';
+import type { Action, Buffs, GameState, Pos, RosterEntry, Side, SpiritId, Unit } from './types';
 
 const freshBuffs = (): Buffs => ({
   sure: false,
@@ -24,12 +26,12 @@ const freshBuffs = (): Buffs => ({
   pierce: false,
 });
 
-function newUnit(side: Side, entry: RosterEntry): Unit {
+function newUnit(side: Side, entry: RosterEntry, spawn: Pos): Unit {
   return {
     side,
     def: entry.unit,
     pilot: entry.pilot,
-    pos: { ...SPAWNS[side] },
+    pos: { ...spawn },
     hp: entry.unit.hp,
     en: entry.unit.en,
     ammo: entry.unit.weapons.map((w) => w.ammo),
@@ -39,10 +41,12 @@ function newUnit(side: Side, entry: RosterEntry): Unit {
   };
 }
 
-export function createGame(p0: RosterEntry, p1: RosterEntry, seed: number): GameState {
+export function createGame(p0: RosterEntry, p1: RosterEntry, seed: number, mapId?: string): GameState {
+  const map = mapById(mapId ?? '');
   const s: GameState = {
-    grid: buildGrid(),
-    units: [newUnit(0, p0), newUnit(1, p1)],
+    mapId: map.id,
+    grid: buildGrid(map),
+    units: [newUnit(0, p0, map.spawns[0]), newUnit(1, p1, map.spawns[1])],
     turn: { side: 0, movedBefore: false, acted: false, movedAfter: false, mpLeft: 0 },
     round: 1,
     lastClash: 1,
@@ -75,15 +79,14 @@ export function rand(s: GameState): number {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-export const baseMove = (u: Unit) => u.def.move + (u.pilot.abilities.includes('agile') ? ABILITY_TUNING.agileMove : 0);
+export const baseMove = (u: Unit) => u.def.move + moveBonusOf(u.pilot);
 
 function beginTurn(s: GameState) {
   const u = activeUnit(s);
   u.buffs.focus = false;
-  if (u.pilot.abilities.includes('regen')) {
-    u.hp = Math.min(u.def.hp, u.hp + Math.round(u.def.hp * ABILITY_TUNING.regen.hpRatio));
-    u.en = Math.min(u.def.en, u.en + ABILITY_TUNING.regen.en);
-  }
+  const start = turnStartOf(u.pilot);
+  if (start.hpRatio > 0) u.hp = Math.min(u.def.hp, u.hp + Math.round(u.def.hp * start.hpRatio));
+  if (start.en > 0) u.en = Math.min(u.def.en, u.en + start.en);
   s.turn = { side: s.turn.side, movedBefore: false, acted: false, movedAfter: false, mpLeft: baseMove(u) };
 }
 
@@ -113,7 +116,7 @@ export function canMove(s: GameState): boolean {
   const t = s.turn;
   if (s.winner !== null || t.mpLeft <= 0) return false;
   if (!t.acted) return !t.movedBefore;
-  return hasAbility(fighterOf(activeUnit(s)), 'hitAway') && !t.movedAfter;
+  return movesAfterAttack(activeUnit(s).pilot) && !t.movedAfter;
 }
 
 export function moveRange(s: GameState): Map<number, ReachNode> {
@@ -121,22 +124,18 @@ export function moveRange(s: GameState): Map<number, ReachNode> {
   return reachable(s.grid, u.def.moveClass, u.pos, canMove(s) ? s.turn.mpLeft : 0, foeUnit(s).pos);
 }
 
+const effectCtx = (s: GameState, u: Unit): EffectCtx => ({
+  unit: u,
+  turn: s.turn,
+  baseMove: baseMove(u),
+  canMove: canMove(s),
+});
+
 export function castable(s: GameState, id: SpiritId): boolean {
   const u = activeUnit(s);
   const def = SPIRITS[id];
   if (s.winner !== null || !u.pilot.spirits.includes(id) || u.used.includes(id) || u.sp < def.cost) return false;
-  switch (def.effect.t) {
-    case 'again':
-      return s.turn.acted;
-    case 'heal':
-      return u.hp < u.def.hp;
-    case 'supply':
-      return u.en < u.def.en || u.ammo.some((a, i) => a !== null && a < (u.def.weapons[i].ammo as number));
-    case 'move':
-      return canMove(s);
-    default:
-      return true;
-  }
+  return handlerOf(def.effect).usable?.(def.effect, effectCtx(s, u)) ?? true;
 }
 
 export function anyCastable(s: GameState): boolean {
@@ -146,42 +145,9 @@ export function anyCastable(s: GameState): boolean {
 export function applySpirit(s: GameState, id: SpiritId) {
   const u = activeUnit(s);
   const def = SPIRITS[id];
-  const e = def.effect;
   u.sp -= def.cost;
   u.used.push(id);
-  switch (e.t) {
-    case 'sure':
-      u.buffs.sure = true;
-      break;
-    case 'flash':
-      u.buffs.flash = true;
-      break;
-    case 'taken':
-      u.buffs.takenMul *= e.mul;
-      break;
-    case 'dealt':
-      u.buffs.dealtMul *= e.mul;
-      break;
-    case 'focus':
-      u.buffs.focus = true;
-      break;
-    case 'pierce':
-      u.buffs.pierce = true;
-      break;
-    case 'move':
-      s.turn.mpLeft += e.bonus;
-      break;
-    case 'heal':
-      u.hp = Math.min(u.def.hp, u.hp + Math.round(u.def.hp * e.ratio));
-      break;
-    case 'supply':
-      u.en = u.def.en;
-      u.ammo = u.def.weapons.map((w) => w.ammo);
-      break;
-    case 'again':
-      s.turn = { side: s.turn.side, movedBefore: false, acted: false, movedAfter: false, mpLeft: baseMove(u) };
-      break;
-  }
+  handlerOf(def.effect).apply(def.effect, effectCtx(s, u));
 }
 
 /** 지금 위치에서 쓸 수 있는 무기 번호와 그 이유(UI 표시용) */
@@ -218,12 +184,10 @@ function describe(ev: StrikeEvent, atk: Unit, def: Unit): string {
       return `${head} - 빗나감`;
     case 'flash':
       return `${head} - ${tgt.def.name}이(가) 섬광으로 회피`;
-    case 'bunshin':
-      return `${head} - ${tgt.def.name}의 분신!`;
-    case 'barrier':
-      return `${head} - ${tgt.def.name}의 배리어가 막았다`;
+    case 'negated':
+      return `${head} - ${tgt.def.name}의 ${ABILITIES[ev.ability!].name}!`;
     default:
-      return `${head} - ${ev.dmg} 피해${ev.shield ? ' (실드 방어)' : ''}`;
+      return `${head} - ${ev.dmg} 피해${ev.reducedBy ? ` (${ABILITIES[ev.reducedBy].name})` : ''}`;
   }
 }
 
