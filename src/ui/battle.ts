@@ -61,10 +61,15 @@ export function startBattle(a: RosterEntry, b: RosterEntry, mapId: string, onExi
   session.busy = false;
   resetHud();
   app().innerHTML = `
-    <div class="hud foe" id="foeHud"></div>
-    <div id="boardWrap"><canvas id="board"></canvas></div>
+    <div id="boardWrap">
+      <div id="stage">
+        <canvas id="board"></canvas>
+        <div class="corner me" id="meCorner"></div>
+        <div class="corner foe" id="foeCorner"></div>
+      </div>
+    </div>
+    <div class="details"><div class="side me" id="meInfo"></div><div class="side foe" id="foeInfo"></div></div>
     <div id="log"></div>
-    <div class="hud me" id="meHud"></div>
     <div class="cmds">
       <button id="bAtk">공격</button>
       <button id="bSp">정신</button>

@@ -15,9 +15,12 @@ export function initBoard(el: HTMLCanvasElement) {
 
 /** 칸 크기는 들어갈 수 있는 영역에 맞춘다. 기기마다 해상도가 달라서 고정값을 쓰지 않는다. */
 export function layout() {
-  const wrap = canvas.parentElement;
-  if (!wrap) return;
+  const wrap = document.getElementById('boardWrap');
+  const stage = document.getElementById('stage');
+  if (!wrap || !stage) return;
   tile = Math.max(24, Math.floor(Math.min(wrap.clientWidth / GRID_W, wrap.clientHeight / GRID_H)));
+  stage.style.width = `${tile * GRID_W}px`;
+  stage.style.height = `${tile * GRID_H}px`;
   const dpr = window.devicePixelRatio || 1;
   canvas.style.width = `${tile * GRID_W}px`;
   canvas.style.height = `${tile * GRID_H}px`;
