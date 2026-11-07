@@ -4,6 +4,7 @@ import { canMove, hasMoved, moveRange } from '../core/game';
 import { dist } from '../core/map';
 import type { Pos, Unit } from '../core/types';
 import { ME, session } from './session';
+import { drawSpiritFx, SPIRIT_FX_MS } from './spiritFx';
 
 let canvas: HTMLCanvasElement;
 let g: CanvasRenderingContext2D;
@@ -66,6 +67,12 @@ export function draw() {
   for (const u of game.units) drawWeaponRange(u);
   for (const u of game.units) drawUnit(u);
   drawAim();
+  const fx = session.spiritFx;
+  if (fx) {
+    const p = Math.min(1, (performance.now() - fx.t0) / SPIRIT_FX_MS);
+    const pos = game.units[fx.side].pos;
+    drawSpiritFx(g, fx.id, p, (pos.x + 0.5) * tile, (pos.y + 0.5) * tile, tile, tile * GRID_W);
+  }
   drawFloaters();
 }
 

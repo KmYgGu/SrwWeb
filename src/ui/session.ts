@@ -1,4 +1,4 @@
-import type { GameState, Pos, Side } from '../core/types';
+import type { GameState, Pos, Side, SpiritId } from '../core/types';
 
 /** 사람이 조종하는 쪽과 AI 가 조종하는 쪽 */
 export const ME = 0;
@@ -55,6 +55,8 @@ export const session = {
   floaters: [] as Floater[],
   anim: null as MoveAnim | null,
   aim: null as AimAnim | null,
+  /** 지금 보여 주는 정신 커맨드 이펙트 */
+  spiritFx: null as { side: Side; id: SpiritId; t0: number } | null,
 };
 
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

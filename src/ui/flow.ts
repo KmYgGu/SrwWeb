@@ -7,6 +7,7 @@ import { dist, pathTo, reachable } from '../core/map';
 import type { Action, Side } from '../core/types';
 import { popText } from './board';
 import { askDefense } from './battleSheet';
+import { SPIRIT_FX_MS } from './spiritFx';
 import { AIM_HOLD_MS, AIM_RESULT_MS, aimTravel, FOE, ME, moveDuration, session, sleep } from './session';
 
 const AI_PROFILE = PROFILES.balanced;
@@ -54,6 +55,11 @@ async function exec(act: Action, defense?: DefenseChoice) {
     session.anim = { side, path, t0: performance.now(), dur };
     await sleep(dur);
     session.anim = null;
+  }
+  if (act.type === 'spirit') {
+    session.spiritFx = { side, id: act.id, t0: performance.now() };
+    await sleep(SPIRIT_FX_MS);
+    session.spiritFx = null;
   }
   if (r.events.length) await showEvents(r.events, r.attacker);
 }
