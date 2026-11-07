@@ -2,15 +2,17 @@ import { GRID_W, ROSTER, TERRAINS } from '../core/data';
 import { buildGrid, MAPS } from '../core/maps';
 import { tileKey } from '../core/map';
 import type { RosterEntry } from '../core/types';
+import { statRadar } from './statRadar';
+import { figureOf } from './unitView';
 
 const RANDOM = 'random';
 const COLUMNS = 3;
 
 type Slot = 'me' | 'foe';
-type FoePick = RosterEntry | typeof RANDOM | null;
+type Pick = RosterEntry | typeof RANDOM | null;
 
-let pickMe: RosterEntry | null = null;
-let pickFoe: FoePick = null;
+let pickMe: Pick = null;
+let pickFoe: Pick = null;
 /** 유닛을 누르면 들어갈 자리 */
 let activeSlot: Slot = 'me';
 let mapIndex = 0;
@@ -45,7 +47,9 @@ function unitGrid(): string {
   const tiles = [...ROSTER.map((r) => tile(r.id, r.unit.name, picture(r))), tile(RANDOM, '랜덤', RANDOM_PICTURE)];
   const rows = Math.ceil(tiles.length / COLUMNS);
   const rowMax = `calc((100cqw - ${(COLUMNS - 1) * 6}px) / ${COLUMNS} + 26px)`;
-  return `<div class="tiles-wrap"><div class="tiles" style="grid-template-rows:repeat(${rows},minmax(0,${rowMax}))">${tiles.join('')}</div></div>`;
+  // 격자가 필요한 만큼만 차지하고 남는 높이는 위의 유닛 정보 칸이 쓴다(.select 의 너비 기준).
+  const height = `calc(${rows} * ((100cqw - ${(COLUMNS - 1) * 6}px) / ${COLUMNS} + 26px) + ${(rows - 1) * 6}px)`;
+  return `<div class="tiles-wrap" style="flex-basis:${height}"><div class="tiles" style="grid-template-rows:repeat(${rows},minmax(0,${rowMax}))">${tiles.join('')}</div></div>`;
 }
 
 function mapPreview(): string {
@@ -85,6 +89,11 @@ function stagePanel(): string {
   </div>`;
 }
 
+function randomExcept(unit: RosterEntry | null): RosterEntry {
+  const others = ROSTER.filter((r) => r.id !== unit?.id);
+  return others[Math.floor(Math.random() * others.length)];
+}
+
 function openPanel(app: HTMLElement, onStart: Start) {
   app.insertAdjacentHTML('beforeend', stagePanel());
   const back = app.querySelector<HTMLElement>('#stageBack')!;
@@ -107,13 +116,15 @@ function openPanel(app: HTMLElement, onStart: Start) {
     if (e.target === back) close();
   });
   back.querySelector('#start')!.addEventListener('click', () => {
-    const others = ROSTER.filter((r) => r.id !== pickMe!.id);
-    const foe = pickFoe === RANDOM ? others[Math.floor(Math.random() * others.length)] : pickFoe!;
-    onStart(pickMe!, foe, MAPS[mapIndex].id);
+    // 랜덤은 전투를 시작할 때 정하고, 양쪽이 같은 유닛이 되지 않게 한다.
+    const fixedMe = pickMe === RANDOM ? null : pickMe;
+    const fixedFoe = pickFoe === RANDOM ? null : pickFoe;
+    const me = fixedMe ?? randomExcept(fixedFoe);
+    onStart(me, fixedFoe ?? randomExcept(me), MAPS[mapIndex].id);
   });
 }
 
-function paintSlot(app: HTMLElement, slot: Slot, pick: FoePick) {
+function paintSlot(app: HTMLElement, slot: Slot, pick: Pick) {
   const el = app.querySelector<HTMLElement>(`[data-slot="${slot}"]`)!;
   el.classList.toggle('active', activeSlot === slot);
   // 고른 유닛이 그대로면 그림을 건드리지 않는다.
@@ -128,23 +139,35 @@ function paintSlot(app: HTMLElement, slot: Slot, pick: FoePick) {
 function paint(app: HTMLElement) {
   paintSlot(app, 'me', pickMe);
   paintSlot(app, 'foe', pickFoe);
-  const foeId = pickFoe === null ? null : pickFoe === RANDOM ? RANDOM : pickFoe.id;
-  app.querySelectorAll<HTMLButtonElement>('[data-unit]').forEach((b) => {
+  const idOf = (pick: Pick) => (pick === null ? null : pick === RANDOM ? RANDOM : pick.id);
+  const meId = idOf(pickMe);
+  const foeId = idOf(pickFoe);
+  app.querySelectorAll<HTMLElement>('[data-unit]').forEach((b) => {
     const id = b.dataset.unit!;
-    const isMe = id === pickMe?.id;
+    const isMe = id === meId;
     const isFoe = id === foeId;
     b.classList.toggle('is-me', isMe);
     b.classList.toggle('is-foe', isFoe && !isMe);
     b.querySelector<HTMLElement>('em.me')!.hidden = !isMe;
     b.querySelector<HTMLElement>('em.foe')!.hidden = !isFoe;
-    // 랜덤은 상대 자리에만 넣을 수 있다.
-    b.disabled = id === RANDOM && activeSlot === 'me';
   });
+}
+
+/** 유닛 정보 칸. 같은 유닛이면 그대로 두어 그림을 다시 불러오지 않는다. 랜덤이나 null 이면 비운다. */
+function showPeek(app: HTMLElement, id: string | null) {
+  const peek = app.querySelector<HTMLElement>('#peek')!;
+  const unit = ROSTER.find((r) => r.id === id) ?? null;
+  const key = unit?.id ?? '';
+  if (peek.dataset.showing === key) return;
+  peek.dataset.showing = key;
+  peek.innerHTML = unit
+    ? `${figureOf(unit.unit)}<div class="peek-info"><b>${unit.unit.name}</b>${statRadar(unit)}</div>`
+    : '';
 }
 
 function choose(app: HTMLElement, value: string, onStart: Start) {
   if (activeSlot === 'me') {
-    pickMe = ROSTER.find((r) => r.id === value)!;
+    pickMe = value === RANDOM ? RANDOM : ROSTER.find((r) => r.id === value)!;
     activeSlot = 'foe'; // 내 유닛을 고르면 바로 상대를 고를 차례다
   } else {
     pickFoe = value === RANDOM ? RANDOM : ROSTER.find((r) => r.id === value)!;
@@ -163,6 +186,7 @@ export function showTitle(onStart: Start) {
   app.innerHTML = `
     <div class="select">
       <div class="slots">${slotButton('me', '내 유닛')}${slotButton('foe', '상대 유닛')}</div>
+      <div class="peek" id="peek"></div>
       ${unitGrid()}
     </div>`;
   app.querySelectorAll<HTMLElement>('[data-slot]').forEach((b) =>
@@ -171,8 +195,17 @@ export function showTitle(onStart: Start) {
       paint(app);
     }),
   );
-  app.querySelectorAll<HTMLElement>('[data-unit]').forEach((b) =>
-    b.addEventListener('click', () => choose(app, b.dataset.unit!, onStart)),
-  );
+  app.querySelectorAll<HTMLElement>('[data-unit]').forEach((b) => {
+    b.addEventListener('click', () => {
+      showPeek(app, b.dataset.unit!); // 호버가 없는 터치 기기에서는 누른 유닛을 보여 준다
+      choose(app, b.dataset.unit!, onStart);
+    });
+    b.addEventListener('pointerenter', (e) => {
+      if (e.pointerType === 'mouse') showPeek(app, b.dataset.unit!);
+    });
+    b.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse') showPeek(app, null);
+    });
+  });
   paint(app);
 }

@@ -4,10 +4,10 @@ import type { Unit } from '../core/types';
  * 유닛 전신 그림은 public/units/<기체 id>.png 에 넣으면 나타난다.
  * 파일이 없으면 이름 첫 글자만 있는 빈 칸이 남는다.
  */
-export const unitImage = (u: Unit) => `${import.meta.env.BASE_URL}units/${u.def.id}.png`;
+export const figureOf = (unit: { id: string; name: string }) =>
+  `<div class="figure"><div class="ph">${unit.name[0]}</div><img src="${import.meta.env.BASE_URL}units/${unit.id}.png" alt="" onerror="this.remove()"></div>`;
 
-export const figure = (u: Unit) =>
-  `<div class="figure"><div class="ph">${u.def.name[0]}</div><img src="${unitImage(u)}" alt="" onerror="this.remove()"></div>`;
+export const figure = (u: Unit) => figureOf(u.def);
 
 export const gauge = (kind: 'hp' | 'en', label: string, cur: number, max: number) =>
   `<div class="gauge"><b>${label}</b><div class="bar ${kind}"><i style="width:${(cur / max) * 100}%"></i><span>${cur}</span></div></div>`;
