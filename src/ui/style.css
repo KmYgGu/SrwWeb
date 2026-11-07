@@ -86,6 +86,10 @@ canvas { touch-action: manipulation; display: block; }
 .bar.hp i { background: linear-gradient(#5bd68a, #2fa862); }
 .bar.en i { background: linear-gradient(#4aa3ff, #2b6fd0); }
 .bar span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 9px; text-shadow: 0 0 3px #000; }
+/* 이번 공방으로 잃을 수 있는 부분: 게이지의 그 구간이 사라졌다 돌아왔다 한다 */
+.bar .loss { position: absolute; top: 0; bottom: 0; min-width: 2px; background: #0b0d13; animation: loss-blink 0.45s ease-in-out infinite alternate; }
+@keyframes loss-blink { from { opacity: 0; } to { opacity: 0.9; } }
+@media (prefers-reduced-motion: reduce) { .bar .loss { animation: none; opacity: 0.6; } }
 
 /* 게이지 아래: 이름, SP, 능력, 상태 */
 .details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 6px 10px; background: var(--panel); border-top: 1px solid var(--line); font-size: 11px; }
@@ -135,13 +139,17 @@ canvas { touch-action: manipulation; display: block; }
 .weapons { display: grid; gap: 6px; }
 .weapons .opt { margin-bottom: 0; }
 .opt.selected { border-color: var(--me); background: #1d2a44; }
+/* 반격 버튼: 휠이나 위아래 드래그로 무기를 바꾼다. 드래그가 화면 스크롤로 넘어가지 않게 막는다 */
+.opt.cycling { position: relative; padding-right: 46px; touch-action: none; }
+.cycle-mark { position: absolute; top: 0; bottom: 0; right: 8px; width: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 9px; color: var(--dim); }
+.cycle-mark b { font-size: 11px; color: var(--text, #fff); }
 
 /* 공격 버튼은 화면 아래에 붙여 두어, 목록이 길어도 스크롤 없이 누를 수 있다 */
 .row2.sticky { position: sticky; bottom: -12px; margin: 12px -12px -12px; padding: 10px 12px 12px; background: var(--panel); border-top: 1px solid var(--line); }
 
 /* 카드 맨 아래 명중률: 눈에 바로 들어오게 크게 */
 .hit { text-align: center; font-size: 22px; font-weight: 800; line-height: 1.1; padding: 6px 0 4px; border-radius: 8px; background: #0b0d13; }
-.hit small { display: block; font-size: 10px; font-weight: 500; color: var(--dim); margin-top: 2px; }
+.hit small { display: block; font-size: 10px; font-weight: 500; color: var(--dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
 .ucard.me .hit { color: #7fe0ff; border: 1px solid #2b5f8a; }
 .ucard.foe .hit { color: #ff9d94; border: 1px solid #8a3b34; }
 .chip.dim { background: transparent; color: var(--dim); padding-left: 0; }

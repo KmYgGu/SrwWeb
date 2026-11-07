@@ -1,8 +1,8 @@
 /** 규칙의 핵심 약속을 짧게 확인한다. 실행: npm run check */
 import assert from 'node:assert/strict';
-import { chooseDefense, decide, PROFILES } from '../ai/ai';
+import { bestCounter, chooseDefense, decide, PROFILES } from '../ai/ai';
 import { ROSTER, RULES } from '../core/data';
-import { fighterOf, maxStrikeDamage } from '../core/exchange';
+import { counterWeapons, fighterOf, maxStrikeDamage, worstLoss } from '../core/exchange';
 import { activeUnit, canMove, createGame, hasMoved, moveRange, perform, weaponStatus } from '../core/game';
 import { dist, keyPos, reachable, tileKey } from '../core/map';
 import { MORALE } from '../core/personalities';
@@ -260,6 +260,28 @@ const longbow = ROSTER.find((r) => r.unit.id === 'longbow')!;
   const log = duel(12000, 12000, 0);
   assert.ok(perform(log, { type: 'attack', weapon: 1 }, { kind: 'guard' }).ok);
   assert.ok(log.log.includes('블레이저: 방어'), '상대의 선택이 로그에 남는다');
+}
+
+// 5-8. 공방 예고: 잃을 수 있는 최대치가 전투 규칙과 같고, 반격 추천 무기는 실제로 쓸 수 있는 것이다.
+{
+  const s = createGame(ROSTER.find((r) => r.unit.id === 'bulwark')!, blazer, 1);
+  const [a, b] = s.units;
+  a.pos = { x: 6, y: 7 };
+  b.pos = { x: 6, y: 6 };
+  const env = { grid: s.grid };
+  const fa = fighterOf(a);
+  const fd = fighterOf(b);
+  const wi = a.def.weapons.findIndex((w) => w.maxRange >= 1 && w.minRange <= 1 && !w.minMorale);
+  const guard = worstLoss(env, fa, fd, wi, { kind: 'guard' });
+  const evade = worstLoss(env, fa, fd, wi, { kind: 'evade' });
+  assert.ok(guard.def.hp > 0 && guard.def.hp < evade.def.hp, '방어는 잃는 체력을 줄인다');
+  assert.equal(guard.atk.hp, 0, '방어하면 공격한 쪽은 체력을 잃지 않는다');
+  assert.equal(guard.atk.en, a.def.weapons[wi].enCost, '공격한 쪽은 무기의 EN 을 쓴다');
+  const usable = counterWeapons(fd, fa);
+  s.turn.side = 0;
+  const rec = bestCounter(s, wi, PROFILES.balanced);
+  assert.ok(rec !== null && usable.includes(rec), '추천 무기는 쓸 수 있는 반격 무기다');
+  assert.ok(worstLoss(env, fa, fd, wi, { kind: 'counter', weapon: rec! }).atk.hp > 0, '반격하면 공격한 쪽도 맞을 수 있다');
 }
 
 // 6. 연출 시간: 이동은 거리와 상관없이 1초 이내, 조준선은 같은 칸 수에서 항상 이동보다 빠르다.

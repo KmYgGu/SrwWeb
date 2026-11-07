@@ -319,6 +319,28 @@ export function exchangeLeaves(
   return out;
 }
 
+export interface WorstLoss {
+  /** 공격을 건 쪽 */
+  atk: { hp: number; en: number };
+  /** 받은 쪽 */
+  def: { hp: number; en: number };
+}
+
+/**
+ * 이 공방으로 양쪽이 잃을 수 있는 최대치. 실제 결과 목록에서 재므로
+ * 추격·배리어·실드·먼저 격추해서 반격이 사라지는 경우까지 전투 규칙 그대로 반영된다.
+ */
+export function worstLoss(env: Env, atk: Fighter, def: Fighter, wi: number, choice: DefenseChoice): WorstLoss {
+  const out: WorstLoss = { atk: { hp: 0, en: 0 }, def: { hp: 0, en: 0 } };
+  for (const lf of exchangeLeaves(env, atk, def, wi, choice)) {
+    out.atk.hp = Math.max(out.atk.hp, atk.hp - lf.a.hp);
+    out.atk.en = Math.max(out.atk.en, atk.en - lf.a.en);
+    out.def.hp = Math.max(out.def.hp, def.hp - lf.d.hp);
+    out.def.en = Math.max(out.def.en, def.en - lf.d.en);
+  }
+  return out;
+}
+
 /** 실제 전투: 난수로 한 가지 결과를 뽑고 이벤트를 남긴다. */
 export function sampleExchange(
   env: Env,

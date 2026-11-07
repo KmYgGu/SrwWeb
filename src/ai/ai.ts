@@ -11,6 +11,7 @@ import { movesAfterAttack } from '../core/abilities';
 import { GRID_H, GRID_W, RULES, TERRAINS } from '../core/data';
 import {
   calcStrike,
+  counterWeapons,
   defenseOptions,
   effMaxRange,
   exchangeLeaves,
@@ -464,12 +465,34 @@ export function chooseDefense(s: GameState, weapon: number, prof: AiProfile): De
   let best: DefenseChoice = { kind: 'guard' };
   let bestV = -Infinity;
   for (const d of defenseOptions(fd, fa)) {
-    let v = 0;
-    for (const lf of exchangeLeaves(env, fa, fd, weapon, d)) v += lf.p * staticEval(prof, lf.d, lf.a);
+    const v = defenseValue(prof, env, fa, fd, weapon, d);
     if (v > bestV + 1e-9) {
       bestV = v;
       best = d;
     }
   }
   return best;
+}
+
+/** 받는 쪽이 이 공격에 반격한다면 가장 좋은 무기. 플레이어의 추천 무기로 쓴다. 쓸 무기가 없으면 null. */
+export function bestCounter(s: GameState, weapon: number, prof: AiProfile): number | null {
+  const env = envOf(s);
+  const fa = fighterOf(activeUnit(s));
+  const fd = fighterOf(foeUnit(s));
+  let best: number | null = null;
+  let bestV = -Infinity;
+  for (const cw of counterWeapons(fd, fa)) {
+    const v = defenseValue(prof, env, fa, fd, weapon, { kind: 'counter', weapon: cw });
+    if (v > bestV + 1e-9) {
+      bestV = v;
+      best = cw;
+    }
+  }
+  return best;
+}
+
+function defenseValue(prof: AiProfile, env: Env, fa: Fighter, fd: Fighter, weapon: number, d: DefenseChoice): number {
+  let v = 0;
+  for (const lf of exchangeLeaves(env, fa, fd, weapon, d)) v += lf.p * staticEval(prof, lf.d, lf.a);
+  return v;
 }
