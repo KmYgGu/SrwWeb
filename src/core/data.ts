@@ -186,7 +186,7 @@ export const ROSTER: RosterEntry[] = [
   {
     id: 'skylancer',
     name: '스카이랜서 / 미라',
-    blurb: '공중 폭격형. 지형을 무시하고 날아가 먼 거리에서 쏜다. 저격과 재생.',
+    blurb: '공중 폭격형. 먼 거리에서 쏜다. 저격과 재생.',
     unit: {
       id: 'skylancer',
       name: '스카이랜서',

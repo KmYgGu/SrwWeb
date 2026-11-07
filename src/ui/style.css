@@ -46,7 +46,8 @@ button.primary { background: #2b5fd0; border-color: #3f78f0; }
 .peek .figure { flex: 0 0 44%; width: auto; height: 100%; max-height: none; aspect-ratio: auto; }
 .peek-info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .peek-info b { flex: none; font-size: 15px; }
-.peek-info p { flex: none; margin: 0; font-size: 12px; line-height: 1.35; color: var(--dim); text-align: center; }
+/* 설명은 항상 두 줄 높이. 유닛마다 줄 수가 달라도 위의 그래프 크기가 변하지 않는다 */
+.peek-info p { flex: none; margin: 0; height: 2.7em; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 12px; line-height: 1.35; color: var(--dim); text-align: center; }
 .radar { flex: 1; min-height: 0; width: 100%; }
 .radar text { fill: var(--dim); font-size: 13px; text-anchor: middle; dominant-baseline: middle; }
 .radar-guide { fill: none; stroke: var(--line); stroke-width: 1; }
@@ -133,7 +134,8 @@ canvas { touch-action: manipulation; display: block; }
 .figure img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .figure .ph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 40px; font-weight: 700; color: rgba(255, 255, 255, 0.25); }
 .ko { text-align: center; font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #fff; background: #d32f2f; border-radius: 6px; padding: 2px 0; animation: koPulse 0.9s ease-in-out infinite; }
-.ko[hidden] { display: none; }
+/* 안 보일 때도 자리는 차지한다. 뜨는 순간 화면이 밀리지 않게 */
+.ko[hidden] { display: block; visibility: hidden; animation: none; }
 @keyframes koPulse { 50% { background: #ff6b5e; } }
 .tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 8px; background: #d32f2f; color: #fff; font-size: 10px; font-weight: 700; }
 .weapons { display: grid; gap: 6px; }
