@@ -39,9 +39,9 @@ button.primary { background: #2b5fd0; border-color: #3f78f0; }
 .tile-name { flex: none; font-size: 12px; line-height: 1.2; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile.is-me { border-color: var(--me); }
 .tile.is-foe { border-color: var(--foe); }
-.select > .primary { flex: none; }
+.square em[hidden] { display: none; }
 
-/* 스테이지 선택 버튼을 누르면 위에 뜨는 패널 */
+/* 양쪽 유닛을 다 고르면 위에 뜨는 스테이지 패널 */
 .stage-back { position: fixed; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, 0.6); }
 .stage-panel { width: 100%; max-width: 496px; height: min(100%, 680px); display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .stage-panel h2 { margin: 0; font-size: 15px; text-align: center; }

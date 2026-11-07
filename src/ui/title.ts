@@ -7,13 +7,13 @@ const RANDOM = 'random';
 const COLUMNS = 3;
 
 type Slot = 'me' | 'foe';
+type FoePick = RosterEntry | typeof RANDOM | null;
 
 let pickMe: RosterEntry | null = null;
-let pickFoe: RosterEntry | typeof RANDOM | null = null;
+let pickFoe: FoePick = null;
 /** 유닛을 누르면 들어갈 자리 */
 let activeSlot: Slot = 'me';
 let mapIndex = 0;
-let panelOpen = false;
 
 type Start = (me: RosterEntry, foe: RosterEntry, mapId: string) => void;
 
@@ -28,30 +28,21 @@ const picture = (r: RosterEntry) =>
 
 const RANDOM_PICTURE = '<span class="ph">?</span>';
 
-function slotButton(slot: Slot, label: string, pick: RosterEntry | typeof RANDOM | null): string {
-  const name = pick === null ? '선택 안 함' : pick === RANDOM ? '랜덤' : pick.unit.name;
-  const pic = pick === null ? '' : pick === RANDOM ? RANDOM_PICTURE : picture(pick);
-  return `<button class="slot ${slot} ${activeSlot === slot ? 'active' : ''}" data-slot="${slot}">
-    <span class="square">${pic}</span>
-    <span class="slot-text"><small>${label}</small><b>${name}</b></span>
+const slotButton = (slot: Slot, label: string) =>
+  `<button class="slot ${slot}" data-slot="${slot}">
+    <span class="square"></span>
+    <span class="slot-text"><small>${label}</small><b></b></span>
   </button>`;
-}
 
-function tile(value: string, name: string, pic: string, isMe: boolean, isFoe: boolean, disabled = false): string {
-  const marks = `${isMe ? '<em class="me">나</em>' : ''}${isFoe ? '<em class="foe">상대</em>' : ''}`;
-  return `<button class="tile ${isMe ? 'is-me' : isFoe ? 'is-foe' : ''}" data-unit="${value}" ${disabled ? 'disabled' : ''}>
-    <span class="tile-img"><span class="square">${pic}${marks}</span></span>
+const tile = (value: string, name: string, pic: string) =>
+  `<button class="tile" data-unit="${value}">
+    <span class="tile-img"><span class="square">${pic}<em class="me" hidden>나</em><em class="foe" hidden>상대</em></span></span>
     <span class="tile-name">${name}</span>
   </button>`;
-}
 
 /** 칸은 정사각형 그림 + 이름 높이까지만 커지고, 화면이 낮으면 그만큼 줄어든다. 유닛이 늘어도 스크롤이 생기지 않는다. */
 function unitGrid(): string {
-  const tiles = [
-    ...ROSTER.map((r) => tile(r.id, r.unit.name, picture(r), r.id === pickMe?.id, pickFoe !== RANDOM && r.id === pickFoe?.id)),
-    // 랜덤은 상대 자리에만 넣을 수 있다.
-    tile(RANDOM, '랜덤', RANDOM_PICTURE, false, pickFoe === RANDOM, activeSlot === 'me'),
-  ];
+  const tiles = [...ROSTER.map((r) => tile(r.id, r.unit.name, picture(r))), tile(RANDOM, '랜덤', RANDOM_PICTURE)];
   const rows = Math.ceil(tiles.length / COLUMNS);
   const rowMax = `calc((100cqw - ${(COLUMNS - 1) * 6}px) / ${COLUMNS} + 26px)`;
   return `<div class="tiles-wrap"><div class="tiles" style="grid-template-rows:repeat(${rows},minmax(0,${rowMax}))">${tiles.join('')}</div></div>`;
@@ -94,72 +85,94 @@ function stagePanel(): string {
   </div>`;
 }
 
-function wirePanel(app: HTMLElement, onStart: Start) {
+function openPanel(app: HTMLElement, onStart: Start) {
+  app.insertAdjacentHTML('beforeend', stagePanel());
+  const back = app.querySelector<HTMLElement>('#stageBack')!;
   const turn = (step: number) => {
     mapIndex = (mapIndex + step + MAPS.length) % MAPS.length;
-    app.querySelector('#mapView')!.innerHTML = mapPreview();
-    app.querySelector('#mapName')!.textContent = MAPS[mapIndex].name;
+    back.querySelector('#mapView')!.innerHTML = mapPreview();
+    back.querySelector('#mapName')!.textContent = MAPS[mapIndex].name;
   };
+  // 뒤로 가면 상대 유닛을 고르기 전으로 돌아간다.
   const close = () => {
-    panelOpen = false;
-    render(onStart);
+    back.remove();
+    pickFoe = null;
+    activeSlot = 'foe';
+    paint(app);
   };
-  app.querySelector('#prevMap')!.addEventListener('click', () => turn(-1));
-  app.querySelector('#nextMap')!.addEventListener('click', () => turn(1));
-  app.querySelector('#closeStage')!.addEventListener('click', close);
-  app.querySelector('#stageBack')!.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).id === 'stageBack') close();
+  back.querySelector('#prevMap')!.addEventListener('click', () => turn(-1));
+  back.querySelector('#nextMap')!.addEventListener('click', () => turn(1));
+  back.querySelector('#closeStage')!.addEventListener('click', close);
+  back.addEventListener('click', (e) => {
+    if (e.target === back) close();
   });
-  app.querySelector('#start')!.addEventListener('click', () => {
+  back.querySelector('#start')!.addEventListener('click', () => {
     const others = ROSTER.filter((r) => r.id !== pickMe!.id);
     const foe = pickFoe === RANDOM ? others[Math.floor(Math.random() * others.length)] : pickFoe!;
     onStart(pickMe!, foe, MAPS[mapIndex].id);
   });
 }
 
-function choose(value: string) {
+function paintSlot(app: HTMLElement, slot: Slot, pick: FoePick) {
+  const el = app.querySelector<HTMLElement>(`[data-slot="${slot}"]`)!;
+  el.classList.toggle('active', activeSlot === slot);
+  // 고른 유닛이 그대로면 그림을 건드리지 않는다.
+  const id = pick === null ? '' : pick === RANDOM ? RANDOM : pick.id;
+  if (el.dataset.pick === id) return;
+  el.dataset.pick = id;
+  el.querySelector('.square')!.innerHTML = pick === null ? '' : pick === RANDOM ? RANDOM_PICTURE : picture(pick);
+  el.querySelector('b')!.textContent = pick === null ? '선택 안 함' : pick === RANDOM ? '랜덤' : pick.unit.name;
+}
+
+/** 화면은 한 번만 만들고, 선택이 바뀌면 달라진 표시만 고친다. 다시 만들면 그림을 새로 불러오느라 깜빡인다. */
+function paint(app: HTMLElement) {
+  paintSlot(app, 'me', pickMe);
+  paintSlot(app, 'foe', pickFoe);
+  const foeId = pickFoe === null ? null : pickFoe === RANDOM ? RANDOM : pickFoe.id;
+  app.querySelectorAll<HTMLButtonElement>('[data-unit]').forEach((b) => {
+    const id = b.dataset.unit!;
+    const isMe = id === pickMe?.id;
+    const isFoe = id === foeId;
+    b.classList.toggle('is-me', isMe);
+    b.classList.toggle('is-foe', isFoe && !isMe);
+    b.querySelector<HTMLElement>('em.me')!.hidden = !isMe;
+    b.querySelector<HTMLElement>('em.foe')!.hidden = !isFoe;
+    // 랜덤은 상대 자리에만 넣을 수 있다.
+    b.disabled = id === RANDOM && activeSlot === 'me';
+  });
+}
+
+function choose(app: HTMLElement, value: string, onStart: Start) {
   if (activeSlot === 'me') {
     pickMe = ROSTER.find((r) => r.id === value)!;
     activeSlot = 'foe'; // 내 유닛을 고르면 바로 상대를 고를 차례다
   } else {
     pickFoe = value === RANDOM ? RANDOM : ROSTER.find((r) => r.id === value)!;
+    if (pickMe === null) activeSlot = 'me';
   }
-}
-
-function render(onStart: Start) {
-  const app = document.getElementById('app')!;
-  const ready = pickMe !== null && pickFoe !== null;
-  app.innerHTML = `
-    <div class="select">
-      <div class="slots">
-        ${slotButton('me', '내 유닛', pickMe)}
-        ${slotButton('foe', '상대 유닛', pickFoe)}
-      </div>
-      ${unitGrid()}
-      <button class="primary" id="openStage" ${ready ? '' : 'disabled'}>스테이지 선택</button>
-    </div>
-    ${panelOpen ? stagePanel() : ''}`;
-
-  app.querySelectorAll<HTMLElement>('[data-slot]').forEach((b) =>
-    b.addEventListener('click', () => {
-      activeSlot = b.dataset.slot as Slot;
-      render(onStart);
-    }),
-  );
-  app.querySelectorAll<HTMLElement>('[data-unit]').forEach((b) =>
-    b.addEventListener('click', () => {
-      choose(b.dataset.unit!);
-      render(onStart);
-    }),
-  );
-  app.querySelector('#openStage')!.addEventListener('click', () => {
-    panelOpen = true;
-    render(onStart);
-  });
-  if (panelOpen) wirePanel(app, onStart);
+  paint(app);
+  // 양쪽이 다 차면 곧바로 스테이지를 고른다.
+  if (pickMe !== null && pickFoe !== null) openPanel(app, onStart);
 }
 
 export function showTitle(onStart: Start) {
-  panelOpen = false; // 패널은 스테이지 선택 버튼을 눌렀을 때만 열린다
-  render(onStart);
+  // 전투에서 돌아오면 내 유닛은 남기고 상대부터 다시 고른다.
+  pickFoe = null;
+  activeSlot = pickMe === null ? 'me' : 'foe';
+  const app = document.getElementById('app')!;
+  app.innerHTML = `
+    <div class="select">
+      <div class="slots">${slotButton('me', '내 유닛')}${slotButton('foe', '상대 유닛')}</div>
+      ${unitGrid()}
+    </div>`;
+  app.querySelectorAll<HTMLElement>('[data-slot]').forEach((b) =>
+    b.addEventListener('click', () => {
+      activeSlot = b.dataset.slot as Slot;
+      paint(app);
+    }),
+  );
+  app.querySelectorAll<HTMLElement>('[data-unit]').forEach((b) =>
+    b.addEventListener('click', () => choose(app, b.dataset.unit!, onStart)),
+  );
+  paint(app);
 }
