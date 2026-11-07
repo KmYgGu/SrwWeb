@@ -15,15 +15,34 @@ button { font: inherit; color: var(--text); background: var(--panel); border: 1p
 button:disabled { opacity: 0.4; }
 button.primary { background: #2b5fd0; border-color: #3f78f0; }
 
-.title { padding: 16px; overflow-y: auto; }
-.title h1 { margin: 0 0 4px; font-size: 20px; }
-.title p { color: var(--dim); margin: 0 0 12px; font-size: 13px; }
-.cards { display: grid; gap: 8px; margin-bottom: 14px; }
-.card { text-align: left; }
-.card.sel { border-color: var(--me); background: #1d2a44; }
-.card b { display: block; }
-.card small { color: var(--dim); }
-.title h2 { font-size: 14px; margin: 10px 0 6px; color: var(--dim); }
+/* 시작 화면: 어떤 기기에서도 스크롤 없이 한 화면에 들어간다. 칸 크기는 남는 높이와 너비에서 정해진다. */
+.select { height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; }
+.pick { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+.pick h2 { margin: 0; font-size: 13px; color: var(--dim); }
+.tiles { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tile { min-height: 0; min-width: 0; padding: 4px; display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
+.tile-img { flex: 1; min-height: 0; container-type: size; display: block; }
+.square { position: relative; display: block; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); margin: auto; overflow: hidden; border-radius: 6px; background: linear-gradient(160deg, #1d2a44, #0b0d13); }
+.square img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.square .ph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 24px; font-weight: 700; color: rgba(255, 255, 255, 0.28); }
+.tile-name { flex: none; font-size: 12px; line-height: 1.2; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick.me .tile.sel { border-color: var(--me); background: #1d2a44; box-shadow: inset 0 0 0 1px var(--me); }
+.pick.foe .tile.sel { border-color: var(--foe); background: #3a2024; box-shadow: inset 0 0 0 1px var(--foe); }
+.select > .primary { flex: none; }
+
+/* 유닛을 다 고르면 그 위에 뜨는 스테이지 패널 */
+.stage-back { position: fixed; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, 0.6); }
+.stage-panel { width: 100%; max-width: 496px; height: min(100%, 680px); display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.stage-panel h2 { margin: 0; font-size: 15px; text-align: center; }
+.stage-row { flex: 1; min-height: 0; display: flex; align-items: center; gap: 6px; }
+.arrow { flex: none; width: 44px; align-self: stretch; padding: 0; font-size: 22px; font-weight: 700; }
+.mapview { flex: 1; min-width: 0; align-self: stretch; container-type: size; display: flex; align-items: center; justify-content: center; }
+.mapgrid { width: min(100cqw, calc(100cqh * 9 / 13)); aspect-ratio: 9 / 13; display: grid; gap: 1px; background: rgba(0, 0, 0, 0.35); border-radius: 4px; overflow: hidden; }
+.mapgrid i { position: relative; display: block; }
+.mapgrid b { position: absolute; inset: 18%; border-radius: 50%; border: 1px solid #fff; }
+.mapgrid b.me { background: #2f78d0; }
+.mapgrid b.foe { background: #d0453a; }
+.stage-name { text-align: center; font-weight: 700; }
 
 /* 맵 위, 아래 모서리에 겹쳐 놓는 초상화와 게이지. 터치는 아래 맵으로 통과시킨다. */
 #boardWrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
