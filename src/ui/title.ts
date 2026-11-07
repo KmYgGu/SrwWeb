@@ -2,7 +2,7 @@ import { GRID_W, ROSTER, TERRAINS } from '../core/data';
 import { buildGrid, MAPS } from '../core/maps';
 import { tileKey } from '../core/map';
 import type { RosterEntry } from '../core/types';
-import { statRadar } from './statRadar';
+import { animateRadar, radarFrame } from './statRadar';
 import { figureOf } from './unitView';
 
 const RANDOM = 'random';
@@ -153,16 +153,22 @@ function paint(app: HTMLElement) {
   });
 }
 
-/** 유닛 정보 칸. 같은 유닛이면 그대로 두어 그림을 다시 불러오지 않는다. 랜덤이나 null 이면 비운다. */
-function showPeek(app: HTMLElement, id: string | null) {
+/**
+ * 유닛 정보 칸. 마지막으로 본 유닛을 계속 보여 주고, 랜덤처럼 유닛이 아닌 칸은 무시한다.
+ * 그래프는 그대로 두고 수치만 바꿔야 이전 유닛의 모양에서 이어서 변한다.
+ */
+function showPeek(app: HTMLElement, id: string) {
+  const unit = ROSTER.find((r) => r.id === id);
   const peek = app.querySelector<HTMLElement>('#peek')!;
-  const unit = ROSTER.find((r) => r.id === id) ?? null;
-  const key = unit?.id ?? '';
-  if (peek.dataset.showing === key) return;
-  peek.dataset.showing = key;
-  peek.innerHTML = unit
-    ? `${figureOf(unit.unit)}<div class="peek-info"><b>${unit.unit.name}</b>${statRadar(unit)}<p>${unit.blurb}</p></div>`
-    : '';
+  if (!unit || peek.dataset.showing === unit.id) return;
+  peek.dataset.showing = unit.id;
+  if (!peek.firstElementChild) {
+    peek.innerHTML = `<div class="figure"></div><div class="peek-info"><b></b>${radarFrame()}<p></p></div>`;
+  }
+  peek.querySelector('.figure')!.outerHTML = figureOf(unit.unit);
+  peek.querySelector('.peek-info b')!.textContent = unit.unit.name;
+  peek.querySelector('.peek-info p')!.textContent = unit.blurb;
+  animateRadar(peek.querySelector('.radar')!, unit);
 }
 
 function choose(app: HTMLElement, value: string, onStart: Start) {
@@ -202,9 +208,6 @@ export function showTitle(onStart: Start) {
     });
     b.addEventListener('pointerenter', (e) => {
       if (e.pointerType === 'mouse') showPeek(app, b.dataset.unit!);
-    });
-    b.addEventListener('pointerleave', (e) => {
-      if (e.pointerType === 'mouse') showPeek(app, null);
     });
   });
   paint(app);
