@@ -15,7 +15,7 @@ const AXES: { label: string; value: (r: RosterEntry) => number }[] = [
 const FLOOR = 0.25;
 const SIZE = 200;
 const CENTER = SIZE / 2;
-const RADIUS = 62;
+const RADIUS = 70;
 
 function ratio(axis: (typeof AXES)[number], r: RosterEntry): number {
   const values = ROSTER.map(axis.value);
@@ -41,11 +41,11 @@ export function statRadar(r: RosterEntry): string {
     return `<line class="radar-guide" x1="${CENTER}" y1="${CENTER}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`;
   }).join('');
   const labels = AXES.map((a, i) => {
-    const [x, y] = point(i, RADIUS + 18);
+    const [x, y] = point(i, RADIUS + 16);
     return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}">${a.label}</text>`;
   }).join('');
   const shape = polygon(AXES.map((a) => RADIUS * ratio(a, r)));
-  return `<svg class="radar" viewBox="0 0 ${SIZE} ${SIZE}" role="img" aria-label="${r.unit.name} 능력치">
+  return `<svg class="radar" viewBox="0 0 ${SIZE} ${SIZE}" preserveAspectRatio="xMidYMin meet" role="img" aria-label="${r.unit.name} 능력치">
     ${guides}${spokes}<polygon class="radar-shape" points="${shape}"/>${labels}
   </svg>`;
 }

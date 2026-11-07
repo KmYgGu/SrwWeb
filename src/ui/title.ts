@@ -6,7 +6,7 @@ import { statRadar } from './statRadar';
 import { figureOf } from './unitView';
 
 const RANDOM = 'random';
-const COLUMNS = 3;
+const COLUMNS = 4;
 
 type Slot = 'me' | 'foe';
 type Pick = RosterEntry | typeof RANDOM | null;
@@ -49,7 +49,7 @@ function unitGrid(): string {
   const rowMax = `calc((100cqw - ${(COLUMNS - 1) * 6}px) / ${COLUMNS} + 26px)`;
   // 격자가 필요한 만큼만 차지하고 남는 높이는 위의 유닛 정보 칸이 쓴다(.select 의 너비 기준).
   const height = `calc(${rows} * ((100cqw - ${(COLUMNS - 1) * 6}px) / ${COLUMNS} + 26px) + ${(rows - 1) * 6}px)`;
-  return `<div class="tiles-wrap" style="flex-basis:${height}"><div class="tiles" style="grid-template-rows:repeat(${rows},minmax(0,${rowMax}))">${tiles.join('')}</div></div>`;
+  return `<div class="tiles-wrap" style="flex-basis:${height}"><div class="tiles" style="grid-template-columns:repeat(${COLUMNS},minmax(0,1fr));grid-template-rows:repeat(${rows},minmax(0,${rowMax}))">${tiles.join('')}</div></div>`;
 }
 
 function mapPreview(): string {
@@ -161,7 +161,7 @@ function showPeek(app: HTMLElement, id: string | null) {
   if (peek.dataset.showing === key) return;
   peek.dataset.showing = key;
   peek.innerHTML = unit
-    ? `${figureOf(unit.unit)}<div class="peek-info"><b>${unit.unit.name}</b>${statRadar(unit)}</div>`
+    ? `${figureOf(unit.unit)}<div class="peek-info"><b>${unit.unit.name}</b>${statRadar(unit)}<p>${unit.blurb}</p></div>`
     : '';
 }
 

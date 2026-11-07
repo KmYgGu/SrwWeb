@@ -27,7 +27,7 @@ button.primary { background: #2b5fd0; border-color: #3f78f0; }
 .slot.me.active { border-color: var(--me); box-shadow: inset 0 0 0 1px var(--me); background: #1d2a44; }
 .slot.foe.active { border-color: var(--foe); box-shadow: inset 0 0 0 1px var(--foe); background: #3a2024; }
 .tiles-wrap { flex: 0 1 auto; min-height: 0; container-type: size; }
-.tiles { height: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; align-content: center; }
+.tiles { height: 100%; display: grid; gap: 6px; align-content: start; }
 .tile { min-height: 0; min-width: 0; padding: 4px; display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
 .tile-img { flex: 1; min-height: 0; container-type: size; display: block; }
 .square { position: relative; display: block; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); margin: auto; overflow: hidden; border-radius: 6px; background: linear-gradient(160deg, #1d2a44, #0b0d13); }
@@ -42,10 +42,11 @@ button.primary { background: #2b5fd0; border-color: #3f78f0; }
 .square em[hidden] { display: none; }
 
 /* 호버한 유닛의 정보. 자리는 늘 비워 두어 나타나도 아래 격자가 움직이지 않는다. */
-.peek { flex: 1 1 0; min-height: 28%; display: flex; gap: 10px; }
+.peek { flex: 0 1 clamp(160px, 30dvh, 260px); min-height: 0; display: flex; gap: 10px; }
 .peek .figure { flex: 0 0 44%; width: auto; height: 100%; max-height: none; aspect-ratio: auto; }
 .peek-info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .peek-info b { flex: none; font-size: 15px; }
+.peek-info p { flex: none; margin: 0; font-size: 12px; line-height: 1.35; color: var(--dim); text-align: center; }
 .radar { flex: 1; min-height: 0; width: 100%; }
 .radar text { fill: var(--dim); font-size: 13px; text-anchor: middle; dominant-baseline: middle; }
 .radar-guide { fill: none; stroke: var(--line); stroke-width: 1; }
