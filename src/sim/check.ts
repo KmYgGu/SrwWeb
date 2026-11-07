@@ -1,5 +1,6 @@
 /** 규칙의 핵심 약속을 짧게 확인한다. 실행: npm run check */
 import assert from 'node:assert/strict';
+import { chooseDefense, decide, PROFILES } from '../ai/ai';
 import { ROSTER, RULES } from '../core/data';
 import { fighterOf, maxStrikeDamage } from '../core/exchange';
 import { activeUnit, canMove, createGame, hasMoved, moveRange, perform, weaponStatus } from '../core/game';
@@ -233,6 +234,32 @@ const longbow = ROSTER.find((r) => r.unit.id === 'longbow')!;
   assert.deepEqual(activeSpiritLabels(u), ['필중', '불굴']);
   u.buffs.takenMul = 0.125;
   assert.ok(activeSpiritLabels(u).includes('피격×0.125'), '겹친 배율은 수치로 적는다');
+}
+
+// 5-7. AI: 상대가 철벽이어도 멀쩡할 때는 반격·공격으로 벗겨 내고, 궁지에서는 맞붙는다.
+{
+  const bulwark = ROSTER.find((r) => r.unit.id === 'bulwark')!;
+  const duel = (meHp: number, foeHp: number, side: 0 | 1) => {
+    const s = createGame(bulwark, blazer, 1);
+    const [a, b] = s.units;
+    a.pos = { x: 6, y: 7 };
+    b.pos = { x: 6, y: 6 };
+    a.hp = meHp;
+    b.hp = foeHp;
+    b.morale = 126;
+    a.buffs.takenMul = 0.25;
+    s.turn.side = side;
+    s.turn.startPos = { ...s.units[side].pos };
+    s.turn.moveBudget = s.units[side].def.move;
+    return s;
+  };
+  const prof = PROFILES.balanced;
+  assert.equal(chooseDefense(duel(12000, 12000, 0), 1, prof).kind, 'counter', '멀쩡하면 철벽 상대에게도 반격');
+  assert.ok(decide(duel(12000, 12000, 1), prof).some((a) => a.type === 'attack'), '멀쩡하면 철벽 상대를 공격');
+  assert.ok(decide(duel(4751, 2464, 1), prof).some((a) => a.type === 'attack'), '궁지에서는 맞붙는다');
+  const log = duel(12000, 12000, 0);
+  assert.ok(perform(log, { type: 'attack', weapon: 1 }, { kind: 'guard' }).ok);
+  assert.ok(log.log.includes('블레이저: 방어'), '상대의 선택이 로그에 남는다');
 }
 
 // 6. 연출 시간: 이동은 거리와 상관없이 1초 이내, 조준선은 같은 칸 수에서 항상 이동보다 빠르다.

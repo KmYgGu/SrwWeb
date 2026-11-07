@@ -69,6 +69,12 @@ export interface AiTuning {
   potentialFalloff: number;
   /** 공격 없이 버틴 라운드마다 위험 가중치를 줄이는 속도(1 + idle / 이 값) */
   idleDecay: number;
+  /** 상대에게 남은 방어 정신(피격 배율·섬광)의 값. 맞혀서 벗겨 내는 동기를 준다 */
+  buffStripWeight: number;
+  /** 어디로 피해도 다음 턴 위험이 이 값 이상이면 궁지에 몰린 것으로 본다 */
+  doomRisk: number;
+  /** 궁지에서 공격 계획에 더해 주는 점수. 앉아서 당하느니 맞붙는다 */
+  doomAttackBonus: number;
   /** 서로 안 때리고 버틴 라운드 하나당 공격 계획에 더해 주는 점수(교착 해소) */
   idleAttackRate: number;
   /** 그 보너스의 상한 */
@@ -97,6 +103,9 @@ export const DEFAULT_TUNING: AiTuning = {
   potentialGrowth: 12,
   potentialFalloff: 8,
   idleDecay: 3,
+  buffStripWeight: 0.25,
+  doomRisk: 0.8,
+  doomAttackBonus: 1.8,
   idleAttackRate: 0.01,
   idleAttackCap: 0.2,
   spiritHoldRate: 0.0045,
@@ -153,7 +162,8 @@ export function staticEval(prof: AiProfile, m: Fighter, o: Fighter): number {
     prof.aggression * or +
     k.enWeight * (m.en / m.u.def.en - o.en / o.u.def.en) +
     k.moraleWeight * (m.morale - o.morale) +
-    k.finisherWeight * (finisherReadiness(m) - finisherReadiness(o))
+    k.finisherWeight * (finisherReadiness(m) - finisherReadiness(o)) -
+    k.buffStripWeight * (1 - o.b.takenMul + (o.b.flash ? 1 : 0))
   );
 }
 
@@ -333,6 +343,7 @@ export function search(ctx: Ctx, S: GameState): Plan {
 
   let best: Plan = { value: -Infinity, move: null, weapon: null };
   const attacks: AttackCand[] = [];
+  let safest = Infinity;
 
   for (const [k, node] of reach) {
     const pos = keyPos(k);
@@ -350,6 +361,7 @@ export function search(ctx: Ctx, S: GameState): Plan {
     // 시작한 칸에서 마치면 EN 이 조금 회복된다(게임 규칙과 같은 조건).
     const waited: Fighter = away ? fm : { ...fm, en: Math.min(me.def.en, fm.en + RULES.restEn) };
     const wv = staticEval(ctx.prof, waited, fo) - kappa * riskOf(ctx, waited, fo) + potential(ctx, waited, fo);
+    safest = Math.min(safest, riskOf(ctx, waited, fo));
     ctx.trace?.push(`wait@(${pos.x},${pos.y}) v=${wv.toFixed(3)} risk=${riskOf(ctx, waited, fo).toFixed(3)}`);
     if (wv > best.value) best = { value: wv, move: needsMove ? pos : null, weapon: null };
 
@@ -372,6 +384,7 @@ export function search(ctx: Ctx, S: GameState): Plan {
     });
   }
 
+  const doomBonus = safest >= ctx.prof.tuning.doomRisk ? ctx.prof.tuning.doomAttackBonus : 0;
   // 상위 후보만 결과마다 정확한 위험도로 다시 계산한다.
   attacks.sort((a, b) => b.coarse - a.coarse);
   for (const c of attacks.slice(0, ctx.prof.tuning.refineTop)) {
@@ -386,7 +399,7 @@ export function search(ctx: Ctx, S: GameState): Plan {
       }
       if (e < v) v = e;
     }
-    v += idleBonus;
+    v += idleBonus + doomBonus;
     if (v > best.value) best = { value: v, move: c.moved ? c.pos : null, weapon: c.wi };
   }
   return best;

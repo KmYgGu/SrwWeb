@@ -1,8 +1,11 @@
+import { PROFILES } from '../ai/ai';
 import type { GameState, Pos, Side, SpiritId } from '../core/types';
 
 /** 사람이 조종하는 쪽과 AI 가 조종하는 쪽 */
 export const ME = 0;
 export const FOE = 1;
+/** 상대 AI 의 성향. 선택 화면이 미리 보여 주는 반응과 실제 반응이 같아야 하므로 한 곳에 둔다 */
+export const AI_PROFILE = PROFILES.balanced;
 
 export interface Floater {
   x: number;

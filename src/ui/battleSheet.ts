@@ -5,13 +5,14 @@
  * 두 경우 모두 양쪽 유닛의 정보(발동 중인 정신만)와 양쪽의 명중률을 한눈에 보이게 하고,
  * 격추할 수 있으면 맞는 쪽 체력 위에 OVERKILL 을 띄운다.
  */
+import { chooseDefense } from '../ai/ai';
 import { ABILITIES } from '../core/abilities';
 import { calcStrike, counterWeapons, fighterOf, maxStrikeDamage, type DefenseChoice, type Env, type Fighter } from '../core/exchange';
 import { activeUnit, envOf, weaponStatus } from '../core/game';
 import { PERSONALITIES } from '../core/personalities';
 import { activeSpiritLabels } from '../core/spirits';
 import type { Unit } from '../core/types';
-import { FOE, ME, session } from './session';
+import { AI_PROFILE, FOE, ME, session } from './session';
 import { addEffectsToggle, sheet, strikeText } from './sheets';
 import { showUnitInfo } from './unitInfo';
 import { figure, gauge, spiritChips } from './unitView';
@@ -53,8 +54,8 @@ function setHit(box: HTMLElement, role: 'me' | 'foe', label: string, value: stri
 
 const pct = (h: number) => `${Math.round(h * 100)}%`;
 
-function hitOf(env: Env, atk: Fighter, def: Fighter, wi: number): number {
-  return calcStrike(env, atk, def, atk.u.def.weapons[wi], false, false).hit;
+function hitOf(env: Env, atk: Fighter, def: Fighter, wi: number, evade = false): number {
+  return calcStrike(env, atk, def, atk.u.def.weapons[wi], evade, false).hit;
 }
 
 /** def 가 atk 의 공격에 반격한다면 쓸 만한 무기(기대 피해가 가장 큰 것). 쓸 수 있는 무기가 없으면 null. */
@@ -73,6 +74,13 @@ function setCounterHit(box: HTMLElement, role: 'me' | 'foe', env: Env, def: Figh
   else setHit(box, role, '반격', '불가');
 }
 
+/** 상대가 이 공격에 어떻게 반응할지. 방어·회피면 상대는 공격하지 않으므로 명중률을 보이지 않는다. */
+function setReaction(box: HTMLElement, env: Env, foe: Fighter, me: Fighter, reaction: DefenseChoice) {
+  if (reaction.kind === 'counter') setHit(box, 'foe', `반격: ${foe.u.def.weapons[reaction.weapon].name}`, pct(hitOf(env, foe, me, reaction.weapon)));
+  else if (reaction.kind === 'guard') setHit(box, 'foe', '받는 피해 절반', '방어');
+  else setHit(box, 'foe', '명중률 절반', '회피');
+}
+
 const STATUS_TEXT = { ok: '', en: 'EN 부족', ammo: '탄 없음', morale: '기력 부족', p: '이동 후 불가(P)', range: '사거리 밖' };
 
 /**
@@ -87,7 +95,9 @@ export function chooseAttack(): Promise<number | null> {
   const fm = fighterOf(me);
   const fo = fighterOf(foe);
   const usable = me.def.weapons.map((_, i) => weaponStatus(game, me, i) === 'ok');
-  const kills = me.def.weapons.map((_, i) => maxStrikeDamage(env, fm, fo, i, false) >= foe.hp);
+  // 상대의 반응은 무기마다 정해져 있다. 실제 공격 때도 같은 판단을 하므로 미리 보여 줄 수 있다.
+  const reactions = me.def.weapons.map((_, i): DefenseChoice => (usable[i] ? chooseDefense(game, i, AI_PROFILE) : { kind: 'guard' }));
+  const kills = me.def.weapons.map((_, i) => maxStrikeDamage(env, fm, fo, i, false, reactions[i].kind === 'guard') >= foe.hp);
   // 처음 고른 상태: 쓸 수 있는 무기 중 기대 피해가 가장 큰 것
   let selected: number | null = null;
   let bestExpected = -1;
@@ -105,7 +115,6 @@ export function chooseAttack(): Promise<number | null> {
     (close, box) => {
       box.insertAdjacentHTML('beforeend', duel(me, foe));
       wireInfo(box, me, foe);
-      setCounterHit(box, 'foe', env, fo, fm);
       const rows: HTMLButtonElement[] = [];
       const list = document.createElement('div');
       list.className = 'weapons';
@@ -119,7 +128,7 @@ export function chooseAttack(): Promise<number | null> {
           .join(' · ');
         const tag = kills[i] ? ' <span class="tag">격추 가능</span>' : '';
         b.innerHTML = `<b>${w.name}</b> 사거리 ${w.minRange}-${w.maxRange} · 위력 ${w.power}${cost ? ' · ' + cost : ''}
-          <small>${st === 'ok' ? strikeText(me, foe, i) + tag : STATUS_TEXT[st]}</small>`;
+          <small>${st === 'ok' ? strikeText(me, foe, i, reactions[i].kind === 'evade', reactions[i].kind === 'guard') + tag : STATUS_TEXT[st]}</small>`;
         b.addEventListener('click', () => {
           selected = i;
           paint();
@@ -140,8 +149,14 @@ export function chooseAttack(): Promise<number | null> {
       const paint = () => {
         rows.forEach((b, i) => b.classList.toggle('selected', i === selected));
         setOverkill(box, 'foe', selected !== null && kills[selected]);
-        if (selected === null) setHit(box, 'me', '무기를 고르세요', '—');
-        else setHit(box, 'me', me.def.weapons[selected].name, pct(hitOf(env, fm, fo, selected)));
+        if (selected === null) {
+          setHit(box, 'me', '무기를 고르세요', '—');
+          setHit(box, 'foe', '', '—');
+        } else {
+          const reaction = reactions[selected];
+          setHit(box, 'me', me.def.weapons[selected].name, pct(hitOf(env, fm, fo, selected, reaction.kind === 'evade')));
+          setReaction(box, env, fo, fm, reaction);
+        }
         yes.disabled = selected === null;
       };
       paint();

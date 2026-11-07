@@ -1,6 +1,6 @@
 /** 턴 진행: 사람의 입력 → 규칙 실행 → 연출 → AI 차례. 규칙 자체는 core 가 한다. */
 import { ABILITIES } from '../core/abilities';
-import { chooseDefense, decide, PROFILES } from '../ai/ai';
+import { chooseDefense, decide } from '../ai/ai';
 import type { DefenseChoice, StrikeEvent } from '../core/exchange';
 import { activeUnit, foeUnit, perform } from '../core/game';
 import { dist, pathTo, reachable } from '../core/map';
@@ -8,9 +8,7 @@ import type { Action, Side } from '../core/types';
 import { popText } from './board';
 import { askDefense } from './battleSheet';
 import { SPIRIT_FX_MS } from './spiritFx';
-import { AIM_HOLD_MS, AIM_RESULT_MS, aimTravel, FOE, ME, moveDuration, session, sleep } from './session';
-
-const AI_PROFILE = PROFILES.balanced;
+import { AI_PROFILE, AIM_HOLD_MS, AIM_RESULT_MS, aimTravel, FOE, ME, moveDuration, session, sleep } from './session';
 
 /** 공방의 한 번 한 번마다 조준선이 날아가고, 도착해 멈춘 뒤에 결과가 뜬다. */
 async function showEvents(events: StrikeEvent[], attacker: Side) {

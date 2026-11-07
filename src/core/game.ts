@@ -205,6 +205,8 @@ function writeBack(u: Unit, f: Fighter) {
   u.buffs = { ...f.b };
 }
 
+const DEFENSE_NAME = { counter: '반격', guard: '방어', evade: '회피' };
+
 function describe(ev: StrikeEvent, atk: Unit, def: Unit): string {
   const who = ev.by === 0 ? atk : def;
   const tgt = ev.by === 0 ? def : atk;
@@ -269,6 +271,7 @@ export function perform(s: GameState, action: Action, defense?: DefenseChoice): 
       const leaf = sampleExchange(envOf(s), fa, fd, wi, defense, () => rand(s));
       writeBack(me, leaf.a);
       writeBack(foe, leaf.d);
+      s.log.push(`${foe.def.name}: ${DEFENSE_NAME[defense.kind]}`);
       for (const ev of leaf.events) s.log.push(describe(ev, me, foe));
       t.acted = true;
       t.attackedInPlace = !moved;
