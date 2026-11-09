@@ -1,4 +1,4 @@
-import { calcStrike, fighterOf } from '../core/exchange';
+import { fighterOf, forecastStrike, type DefenseChoice } from '../core/exchange';
 import { activeUnit, castable, envOf } from '../core/game';
 import { SPIRITS } from '../core/spirits';
 import type { SpiritId, Unit } from '../core/types';
@@ -53,9 +53,10 @@ export function addEffectsToggle(box: HTMLElement) {
   box.appendChild(wrap);
 }
 
-export function strikeText(atk: Unit, def: Unit, wi: number, evade = false, guard = false): string {
-  const st = calcStrike(envOf(session.game), fighterOf(atk), fighterOf(def), atk.def.weapons[wi], evade, guard);
-  return st.flash ? '명중 0% (섬광)' : `명중 ${Math.round(st.hit * 100)}% · 피해 ${st.dmg}`;
+export function strikeText(atk: Unit, def: Unit, wi: number, choice: DefenseChoice): string {
+  const f = forecastStrike(envOf(session.game), fighterOf(atk), fighterOf(def), wi, choice);
+  if (f.flash) return `명중 0% (섬광) · 예상 대응: ${f.reaction}`;
+  return `명중 ${Math.round(f.hit * 100)}% · 피해 ${f.dmg} · 예상 대응: ${f.reaction}`;
 }
 
 export function pickSpirit(): Promise<SpiritId | null> {

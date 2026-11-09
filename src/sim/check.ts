@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { bestCounter, chooseDefense, decide, PROFILES } from '../ai/ai';
 import { ROSTER, RULES } from '../core/data';
 import { calcStrike, counterWeapons, exchangeLeaves, fighterOf, maxStrikeDamage, sampleExchange, worstLoss } from '../core/exchange';
-import { activeUnit, canMove, createGame, hasMoved, moveRange, perform, weaponStatus } from '../core/game';
+import { activeUnit, applySpirit, canMove, createGame, hasMoved, moveRange, perform, weaponStatus } from '../core/game';
 import { dist, keyPos, reachable, tileKey } from '../core/map';
 import { MORALE } from '../core/personalities';
-import { activeSpiritLabels } from '../core/spirits';
+import { activeEffectLabels, lastingSpiritIds, SPIRITS, handlerOf } from '../core/spirits';
 import { aimTravel, moveDuration } from '../ui/session';
 
 const blazer = ROSTER.find((r) => r.unit.id === 'blazer')!;
@@ -224,16 +224,19 @@ const longbow = ROSTER.find((r) => r.unit.id === 'longbow')!;
   assert.ok(half < one, '불굴은 피해를 줄인다');
 }
 
-// 5-6. 발동 중인 정신은 이름으로 보여 준다.
+// 5-6. 발동 중인 정신은 effects 목록(이름)으로만 보여 준다.
 {
   const s = createGame(blazer, longbow, 1);
   const u = activeUnit(s);
-  assert.deepEqual(activeSpiritLabels(u), []);
+  assert.deepEqual(activeEffectLabels(u), []);
   perform(s, { type: 'spirit', id: 'sure' });
   perform(s, { type: 'spirit', id: 'fortitude' });
-  assert.deepEqual(activeSpiritLabels(u), ['필중', '불굴']);
-  u.buffs.takenMul = 0.125;
-  assert.ok(activeSpiritLabels(u).includes('피격×0.125'), '겹친 배율은 수치로 적는다');
+  assert.deepEqual(activeEffectLabels(u), ['필중', '불굴']);
+  // 공방에서 버프가 소모되면 writeBack 이 effects 도 지운다.
+  u.pos = { x: 4, y: 8 };
+  s.units[1].pos = { x: 4, y: 7 };
+  assert.ok(perform(s, { type: 'attack', weapon: 1 }, { kind: 'guard' }).ok);
+  assert.ok(!activeEffectLabels(u).includes('필중'), '공격에 필중이 쓰이면 목록에서 빠진다');
 }
 
 // 5-7. AI: 상대가 철벽이어도 멀쩡할 때는 반격·공격으로 벗겨 내고, 궁지에서는 맞붙는다.
@@ -314,5 +317,39 @@ for (let steps = 1; steps <= 300; steps++) {
   assert.ok(aimTravel(steps) <= ms, `조준선(${aimTravel(steps)}ms)이 이동(${ms}ms)보다 빨라야 한다 (${steps}칸)`);
   assert.ok(aimTravel(steps) >= 100, '조준선이 눈에 보일 만큼은 걸려야 한다');
 }
+
+
+// 7. 지속 정신은 HUD 목록(unit.effects)에 반드시 이름이 남는다.
+{
+  for (const id of lastingSpiritIds()) {
+    const def = SPIRITS[id];
+    assert.equal(handlerOf(def.effect).lasting, true, `${def.name} 은 lasting`);
+    const s = createGame(blazer, longbow, 1);
+    const me = activeUnit(s);
+    // 쓸 수 있게 자원·상태를 맞춘다.
+    me.sp = 99;
+    me.used = [];
+    if (def.effect.t === 'heal') me.hp = Math.floor(me.def.hp * 0.5);
+    if (def.effect.t === 'again') {
+      s.turn.acted = true;
+    }
+    applySpirit(s, id);
+    assert.ok(
+      activeEffectLabels(me).includes(def.name),
+      `지속 정신 ${def.name} 사용 후 HUD 라벨이 없다: ${JSON.stringify(activeEffectLabels(me))}`,
+    );
+  }
+  // 즉발 정신(기합·수복 등)은 lasting 이 아니므로 목록에 안 남는다.
+  const s = createGame(blazer, longbow, 1);
+  const me = activeUnit(s);
+  me.sp = 99;
+  me.morale = 100;
+  applySpirit(s, 'spirit');
+  assert.ok(!activeEffectLabels(me).includes('기합'), '기합은 즉발이라 HUD 에 남지 않는다');
+  // 신속은 Buffs 가 없어도 라벨이 남는다.
+  applySpirit(s, 'haste');
+  assert.ok(activeEffectLabels(me).includes('신속'), '신속은 이동 보너스만 있어도 HUD 에 남는다');
+}
+
 
 console.log('check: 모두 통과');

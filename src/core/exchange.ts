@@ -160,6 +160,30 @@ export function maxStrikeDamage(
   return per * Math.max(0, hits);
 }
 
+
+const REACTION_LABEL = { counter: '반격', guard: '방어', evade: '회피' } as const;
+
+/**
+ * 공격 예고에 쓰는 명중·피해. calcStrike 한길을 쓰므로 회피(명중 절반)·방어(피해 절반)가 실제 전투와 같다.
+ * 불굴 등 피격 배율(takenMul)은 반영하고, 분신·배리어·실드처럼 확률로 끼어드는 방어는 넣지 않는다(게이지 예고는 worstLoss 가 담당).
+ */
+export function forecastStrike(
+  env: Env,
+  atk: Fighter,
+  def: Fighter,
+  wi: number,
+  choice: DefenseChoice,
+): { hit: number; dmg: number; reaction: string; flash: boolean } {
+  const evade = choice.kind === 'evade';
+  const guard = choice.kind === 'guard';
+  const w = atk.u.def.weapons[wi];
+  const st = calcStrike(env, atk, def, w, evade, guard);
+  let dmg = st.dmg;
+  if (def.b.takenMul !== 1) dmg = Math.max(RULES.minDamage, Math.round(dmg * def.b.takenMul));
+  if (st.flash) dmg = 0;
+  return { hit: st.hit, dmg, reaction: REACTION_LABEL[choice.kind], flash: st.flash };
+}
+
 export function counterWeapons(def: Fighter, atk: Fighter): number[] {
   const d = dist(def.pos, atk.pos);
   const out: number[] = [];

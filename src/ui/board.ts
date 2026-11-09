@@ -60,8 +60,37 @@ export function draw() {
     }
   }
   if (!session.busy && game.winner === null && game.turn.side === ME && canMove(game)) {
-    g.fillStyle = 'rgba(74,163,255,0.35)';
-    for (const k of moveRange(game).keys()) g.fillRect((k % GRID_W) * tile, Math.floor(k / GRID_W) * tile, tile, tile);
+    const reach = moveRange(game);
+    g.fillStyle = 'rgba(74,163,255,0.32)';
+    for (const k of reach.keys()) g.fillRect((k % GRID_W) * tile, Math.floor(k / GRID_W) * tile, tile, tile);
+    // 이동 범위 외곽선 — 사거리(금/빨간 선)와 구분되는 하늘색
+    g.strokeStyle = '#7ec8ff';
+    g.lineWidth = 2.5;
+    g.beginPath();
+    const inside = (x: number, y: number) => reach.has(y * GRID_W + x);
+    for (const k of reach.keys()) {
+      const x = k % GRID_W;
+      const y = Math.floor(k / GRID_W);
+      const inset = 1.25;
+      if (!inside(x, y - 1)) {
+        g.moveTo(x * tile + inset, y * tile + inset);
+        g.lineTo((x + 1) * tile - inset, y * tile + inset);
+      }
+      if (!inside(x, y + 1)) {
+        g.moveTo(x * tile + inset, (y + 1) * tile - inset);
+        g.lineTo((x + 1) * tile - inset, (y + 1) * tile - inset);
+      }
+      if (!inside(x - 1, y)) {
+        g.moveTo(x * tile + inset, y * tile + inset);
+        g.lineTo(x * tile + inset, (y + 1) * tile - inset);
+      }
+      if (!inside(x + 1, y)) {
+        g.moveTo((x + 1) * tile - inset, y * tile + inset);
+        g.lineTo((x + 1) * tile - inset, (y + 1) * tile - inset);
+      }
+    }
+    g.stroke();
+    g.lineWidth = 1;
   }
   drawStartMarker();
   for (const u of game.units) drawWeaponRange(u);

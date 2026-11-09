@@ -15,7 +15,7 @@ import {
 import { buildGrid, mapById } from './maps';
 import { MORALE } from './personalities';
 import { dist, reachable, samePos, tileKey, type ReachNode } from './map';
-import { handlerOf, SPIRITS, type EffectCtx } from './spirits';
+import { addEffect, handlerOf, removeEffectsOfType, SPIRITS, type EffectCtx } from './spirits';
 import type { Action, Buffs, GameState, Pos, RosterEntry, Side, SpiritId, Unit } from './types';
 
 const freshBuffs = (): Buffs => ({
@@ -41,6 +41,7 @@ function newUnit(side: Side, entry: RosterEntry, spawn: Pos): Unit {
     lastWeapon: null,
     morale: MORALE.base,
     buffs: freshBuffs(),
+    effects: [],
   };
 }
 
@@ -62,7 +63,7 @@ export function createGame(p0: RosterEntry, p1: RosterEntry, seed: number, mapId
 }
 
 function cloneUnit(u: Unit): Unit {
-  return { ...u, pos: { ...u.pos }, ammo: u.ammo.slice(), used: u.used.slice(), buffs: { ...u.buffs } };
+  return { ...u, pos: { ...u.pos }, ammo: u.ammo.slice(), used: u.used.slice(), buffs: { ...u.buffs }, effects: u.effects.map((e) => ({ ...e })) };
 }
 
 /** AI가 가정을 세워 볼 때 쓰는 복사본. 지형은 바뀌지 않으므로 공유한다. */
@@ -87,6 +88,9 @@ export const baseMove = (u: Unit) => u.def.move + moveBonusOf(u.pilot);
 function beginTurn(s: GameState) {
   const u = activeUnit(s);
   u.buffs.focus = false;
+  // 집중·신속은 내 턴이 다시 시작될 때 끝난다(HUD effects 도 같이 지운다).
+  removeEffectsOfType(u, 'focus');
+  removeEffectsOfType(u, 'move');
   const start = turnStartOf(u.pilot);
   if (start.hpRatio > 0) u.hp = Math.min(u.def.hp, u.hp + Math.round(u.def.hp * start.hpRatio));
   if (start.en > 0) u.en = Math.min(u.def.en, u.en + start.en);
@@ -152,18 +156,19 @@ export function moveRange(s: GameState): Map<number, ReachNode> {
   return reach;
 }
 
-const effectCtx = (s: GameState, u: Unit): EffectCtx => ({
+const effectCtx = (s: GameState, u: Unit, spiritId: SpiritId): EffectCtx => ({
   unit: u,
   turn: s.turn,
   baseMove: baseMove(u),
   canMove: canMove(s),
+  spiritId,
 });
 
 export function castable(s: GameState, id: SpiritId): boolean {
   const u = activeUnit(s);
   const def = SPIRITS[id];
   if (s.winner !== null || !u.pilot.spirits.includes(id) || u.used.includes(id) || u.sp < def.cost) return false;
-  return handlerOf(def.effect).usable?.(def.effect, effectCtx(s, u)) ?? true;
+  return handlerOf(def.effect).usable?.(def.effect, effectCtx(s, u, id)) ?? true;
 }
 
 export function anyCastable(s: GameState): boolean {
@@ -175,7 +180,10 @@ export function applySpirit(s: GameState, id: SpiritId) {
   const def = SPIRITS[id];
   u.sp -= def.cost;
   u.used.push(id);
-  handlerOf(def.effect).apply(def.effect, effectCtx(s, u));
+  const h = handlerOf(def.effect);
+  h.apply(def.effect, effectCtx(s, u, id));
+  // 지속 효과는 규칙 상태와 별도로 HUD 목록에 등록한다(신속처럼 Buffs 에 안 남는 것도 여기로).
+  if (h.lasting) addEffect(u, id, def.name);
 }
 
 /** 지금 위치에서 쓸 수 있는 무기 번호와 그 이유(UI 표시용) */
@@ -203,6 +211,13 @@ function writeBack(u: Unit, f: Fighter) {
   u.ammo = f.ammo.slice();
   u.morale = f.morale;
   u.buffs = { ...f.b };
+  // 공방에서 소모된 버프는 HUD 목록에서도 같은 기준으로 지운다.
+  if (!f.b.sure) removeEffectsOfType(u, 'sure');
+  if (!f.b.flash) removeEffectsOfType(u, 'flash');
+  if (f.b.takenMul === 1) removeEffectsOfType(u, 'taken');
+  if (f.b.dealtMul === 1) removeEffectsOfType(u, 'dealt');
+  if (!f.b.focus) removeEffectsOfType(u, 'focus');
+  if (!f.b.pierce) removeEffectsOfType(u, 'pierce');
 }
 
 const DEFENSE_NAME = { counter: '반격', guard: '방어', evade: '회피' };

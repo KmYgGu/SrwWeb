@@ -5,7 +5,7 @@ import type { Unit } from '../core/types';
  * 파일이 없으면 이름 첫 글자만 있는 빈 칸이 남는다.
  */
 export const figureOf = (unit: { id: string; name: string }) =>
-  `<div class="figure"><div class="ph">${unit.name[0]}</div><img src="${import.meta.env.BASE_URL}units/${unit.id}.png" alt="" onerror="this.remove()"></div>`;
+  `<div class="figure"><div class="ph">${unit.name[0]}</div><img src="${import.meta.env.BASE_URL}units/${unit.id}.png" alt=""></div>`;
 
 export const figure = (u: Unit) => figureOf(u.def);
 

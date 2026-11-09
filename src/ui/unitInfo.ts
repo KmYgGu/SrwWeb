@@ -2,7 +2,7 @@
 import { ABILITIES } from '../core/abilities';
 import { TERRAINS } from '../core/data';
 import { PERSONALITIES } from '../core/personalities';
-import { activeSpiritLabels, SPIRITS } from '../core/spirits';
+import { activeEffectLabels, SPIRITS } from '../core/spirits';
 import type { TerrainId, Unit } from '../core/types';
 import { sheet } from './sheets';
 import { figure, gauge, spiritChips } from './unitView';
@@ -47,7 +47,7 @@ export function showUnitInfo(u: Unit): Promise<null> {
           ${gauge('hp', 'HP', u.hp, u.def.hp)}
           ${gauge('en', 'EN', u.en, u.def.en)}
           <small>기력 ${u.morale} · SP ${u.sp} · 최근 무기: ${last}</small>
-          <div class="chips">${spiritChips(activeSpiritLabels(u))}</div>
+          <div class="chips">${spiritChips(activeEffectLabels(u))}</div>
           <h4>기체</h4>
           <small>장갑 ${u.def.armor} · 운동성 ${u.def.mobility} · 이동 ${u.def.move}${u.def.moveClass === 'air' ? ' (공중)' : ''}</small>
           <small>지형 적응: ${adaptText(u)}</small>

@@ -2,6 +2,9 @@
  * 정신 커맨드. 각 커맨드는 효과 종류(effect)와 수치만 가진 데이터이고,
  * 효과 종류가 실제로 하는 일은 EFFECTS 표에 한 번만 적는다.
  * 새 커맨드 = SPIRITS 에 항목 추가(기존 효과 재사용). 새 효과 종류 = EFFECTS 에 핸들러 추가.
+ *
+ * 지속 효과(lasting)는 apply 때 unit.effects 에 등록하고, 효과가 끝나면 같은 목록에서 뺀다.
+ * HUD 는 이 목록만 본다(Buffs 나 moveBudget 을 직접 해석하지 않는다).
  */
 import { clampMorale, MORALE } from './personalities';
 import type { SpiritId, TurnState, Unit } from './types';
@@ -48,6 +51,8 @@ export interface EffectCtx {
   /** 이 유닛의 기본 이동력(능력 보정 포함) */
   baseMove: number;
   canMove: boolean;
+  /** 지금 쓰는 정신(지속 효과 등록용) */
+  spiritId: SpiritId;
 }
 
 interface Handler<E> {
@@ -60,18 +65,57 @@ interface Handler<E> {
   worthCasting?(e: E, u: Unit): boolean;
   /** AI: 아껴 두는 값에 곱할 배율 */
   holdScale?(e: E, u: Unit): number;
+  /**
+   * 한동안 남아서 HUD 에 보여야 하는 효과인가.
+   * true 이면 applySpirit 이 unit.effects 에 이름을 넣고, 효과가 끝날 때 같은 목록에서 뺀다.
+   */
+  lasting?: boolean;
 }
 
 type Handlers = { [K in SpiritEffect['t']]: Handler<Extract<SpiritEffect, { t: K }>> };
 
+export function addEffect(u: Unit, id: SpiritId, label: string) {
+  if (!u.effects.some((e) => e.id === id)) u.effects.push({ id, label });
+}
+
+export function removeEffects(u: Unit, pred: (id: SpiritId) => boolean) {
+  u.effects = u.effects.filter((e) => !pred(e.id));
+}
+
+export function removeEffectsOfType(u: Unit, t: SpiritEffect['t']) {
+  removeEffects(u, (id) => SPIRITS[id].effect.t === t);
+}
+
 export const EFFECTS: Handlers = {
-  sure: { beforeActionOnly: true, apply: (_e, c) => void (c.unit.buffs.sure = true) },
-  flash: { apply: (_e, c) => void (c.unit.buffs.flash = true) },
-  taken: { apply: (e, c) => void (c.unit.buffs.takenMul *= e.mul) },
-  dealt: { beforeActionOnly: true, apply: (e, c) => void (c.unit.buffs.dealtMul *= e.mul) },
-  focus: { apply: (_e, c) => void (c.unit.buffs.focus = true) },
-  pierce: { beforeActionOnly: true, apply: (_e, c) => void (c.unit.buffs.pierce = true) },
+  sure: {
+    lasting: true,
+    beforeActionOnly: true,
+    apply: (_e, c) => void (c.unit.buffs.sure = true),
+  },
+  flash: {
+    lasting: true,
+    apply: (_e, c) => void (c.unit.buffs.flash = true),
+  },
+  taken: {
+    lasting: true,
+    apply: (e, c) => void (c.unit.buffs.takenMul *= e.mul),
+  },
+  dealt: {
+    lasting: true,
+    beforeActionOnly: true,
+    apply: (e, c) => void (c.unit.buffs.dealtMul *= e.mul),
+  },
+  focus: {
+    lasting: true,
+    apply: (_e, c) => void (c.unit.buffs.focus = true),
+  },
+  pierce: {
+    lasting: true,
+    beforeActionOnly: true,
+    apply: (_e, c) => void (c.unit.buffs.pierce = true),
+  },
   move: {
+    lasting: true,
     apply: (e, c) => void (c.turn.moveBudget += e.bonus),
     usable: (_e, c) => c.canMove,
   },
@@ -99,6 +143,8 @@ export const EFFECTS: Handlers = {
   },
   again: {
     apply: (_e, c) => {
+      // 새 행동으로 넘어가므로 이번 턴 이동 보너스(신속)는 여기서 끝난다.
+      removeEffectsOfType(c.unit, 'move');
       Object.assign(c.turn, {
         startPos: { ...c.unit.pos },
         acted: false,
@@ -115,20 +161,17 @@ export const EFFECTS: Handlers = {
 /** effect 종류를 모르는 곳에서 쓰는 조회. 타입 정보는 호출 쪽에서 합쳐진다. */
 export const handlerOf = (e: SpiritEffect): Handler<SpiritEffect> => EFFECTS[e.t] as Handler<SpiritEffect>;
 
+/** lasting 효과가 있는 정신 id 목록(검사·문서용). */
+export const lastingSpiritIds = (): SpiritId[] =>
+  (Object.keys(SPIRITS) as SpiritId[]).filter((id) => handlerOf(SPIRITS[id].effect).lasting);
+
 /**
- * 지금 발동 중인 정신의 이름. 쓰이거나 때가 되면 사라지는 상태(Buffs)를 정신 이름으로 되돌려 보여 준다.
- * 같은 수치의 정신이 없으면(예: 불굴과 철벽을 겹친 경우) 배율을 그대로 적는다.
+ * HUD 가 보는 유일한 지속 효과 목록.
+ * Buffs 나 이동력을 직접 해석하지 않는다 — 등록은 applySpirit / 해제는 규칙 코드가 한다.
  */
-export function activeSpiritLabels(u: Unit): string[] {
-  const b = u.buffs;
-  const byEffect = (t: SpiritEffect['t'], mul?: number) =>
-    Object.values(SPIRITS).find((s) => s.effect.t === t && (mul === undefined || ('mul' in s.effect && s.effect.mul === mul)))?.name;
-  const out: string[] = [];
-  if (b.sure) out.push(byEffect('sure')!);
-  if (b.flash) out.push(byEffect('flash')!);
-  if (b.takenMul !== 1) out.push(byEffect('taken', b.takenMul) ?? `피격×${b.takenMul}`);
-  if (b.dealtMul !== 1) out.push(byEffect('dealt', b.dealtMul) ?? `공격×${b.dealtMul}`);
-  if (b.focus) out.push(byEffect('focus')!);
-  if (b.pierce) out.push(byEffect('pierce')!);
-  return out;
+export function activeEffectLabels(u: Unit): string[] {
+  return u.effects.map((e) => e.label);
 }
+
+/** @deprecated activeEffectLabels 로 통합. 기존 import 호환용 */
+export const activeSpiritLabels = activeEffectLabels;

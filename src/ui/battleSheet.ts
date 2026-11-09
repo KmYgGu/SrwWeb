@@ -8,10 +8,10 @@
 import { bestCounter, chooseDefense } from '../ai/ai';
 import { ABILITIES } from '../core/abilities';
 import { TERRAINS } from '../core/data';
-import { calcStrike, counterWeapons, fighterOf, gradeOf, maxStrikeDamage, worstLoss, type DefenseChoice, type Env, type Fighter } from '../core/exchange';
+import { calcStrike, counterWeapons, fighterOf, forecastStrike, gradeOf, worstLoss, type DefenseChoice, type Env, type Fighter } from '../core/exchange';
 import { activeUnit, envOf, weaponStatus } from '../core/game';
 import { PERSONALITIES } from '../core/personalities';
-import { activeSpiritLabels } from '../core/spirits';
+import { activeEffectLabels } from '../core/spirits';
 import type { Unit } from '../core/types';
 import { AI_PROFILE, FOE, ME, session } from './session';
 import { addEffectsToggle, sheet, strikeText } from './sheets';
@@ -22,7 +22,7 @@ type Role = 'me' | 'foe';
 
 function unitCard(u: Unit, role: Role): string {
   const abilities = u.pilot.abilities.map((a) => ABILITIES[a].name).join(' · ');
-  const active = activeSpiritLabels(u);
+  const active = activeEffectLabels(u);
   return `<div class="ucard ${role}">
     ${figure(u)}
     <b>${u.def.name} / ${u.pilot.name}</b>
@@ -51,9 +51,11 @@ function setOverkill(box: HTMLElement, role: Role, on: boolean) {
 }
 
 /** 카드 맨 아래의 큰 명중률 표시. 피해 줄은 내용이 없어도 자리를 지켜서, 고르는 도중 아래 버튼이 움직이지 않게 한다. */
-function setHit(box: HTMLElement, role: Role, label: string, value: string, dmg?: number) {
+function setHit(box: HTMLElement, role: Role, label: string, value: string, dmg?: number, reaction?: string) {
+  const dmgLine = dmg === undefined ? '&nbsp;' : `피해 ${dmg}`;
+  const reactLine = reaction ? `예상 대응: ${reaction}` : '&nbsp;';
   box.querySelector<HTMLElement>(`.ucard.${role} .hit`)!.innerHTML =
-    `${value}<small>${label || '&nbsp;'}</small><small>${dmg === undefined ? '&nbsp;' : `피해 ${dmg}`}</small>`;
+    `${value}<small>${label || '&nbsp;'}</small><small>${dmgLine}</small><small class="react">${reactLine}</small>`;
 }
 
 const pct = (h: number) => `${Math.round(h * 100)}%`;
@@ -84,13 +86,16 @@ interface Side {
  * 게이지와 OVERKILL 은 worstLoss 에서 나오므로 전투 규칙과 어긋나지 않는다.
  */
 function paintExchange(box: HTMLElement, env: Env, atk: Side, def: Side, wi: number, choice: DefenseChoice) {
-  const guard = choice.kind === 'guard';
   const w = atk.f.u.def.weapons[wi];
-  setHit(box, atk.role, w.name, pct(calcStrike(env, atk.f, def.f, w, choice.kind === 'evade', guard).hit), maxStrikeDamage(env, atk.f, def.f, wi, false, guard));
+  // 목록·큰 숫자 모두 forecastStrike(→calcStrike) 한길. 회피=명중 절반, 방어=피해 절반.
+  const main = forecastStrike(env, atk.f, def.f, wi, choice);
+  setHit(box, atk.role, w.name, pct(main.hit), main.dmg, main.reaction);
   if (choice.kind === 'counter') {
     const cw = def.f.u.def.weapons[choice.weapon];
-    setHit(box, def.role, `반격: ${cw.name}`, pct(calcStrike(env, def.f, atk.f, cw, false, false).hit), maxStrikeDamage(env, def.f, atk.f, choice.weapon, false));
-  } else if (guard) {
+    // 반격은 상대의 방어 선택이 없으므로 기본 명중·피해(forecast 의 evade/guard 아님).
+    const back = forecastStrike(env, def.f, atk.f, choice.weapon, { kind: 'counter', weapon: choice.weapon });
+    setHit(box, def.role, `반격: ${cw.name}`, pct(back.hit), back.dmg);
+  } else if (choice.kind === 'guard') {
     setHit(box, def.role, '받는 피해 절반', '방어');
   } else {
     setHit(box, def.role, '명중률 절반', '회피');
@@ -230,7 +235,7 @@ export function chooseAttack(): Promise<number | null> {
         const cost = weaponTags(me, i).join(' · ');
         const tag = kills[i] ? ' <span class="tag">격추 가능</span>' : '';
         b.innerHTML = `<b>${w.name}</b> 사거리 ${w.minRange}-${w.maxRange} · 위력 ${w.power}${cost ? ' · ' + cost : ''}
-          <small>${st === 'ok' ? strikeText(me, foe, i, reactions[i].kind === 'evade', reactions[i].kind === 'guard') + tag : STATUS_TEXT[st]}</small>`;
+          <small>${st === 'ok' ? strikeText(me, foe, i, reactions[i]) + tag : STATUS_TEXT[st]}</small>`;
         b.addEventListener('click', () => {
           selected = i;
           paint();
@@ -333,8 +338,8 @@ export async function askDefense(weapon: number): Promise<DefenseChoice> {
         b.addEventListener('pointerleave', () => show(resting()));
         list.appendChild(b);
       };
-      add('방어', `받는 피해 절반, 반격 없음 · ${strikeText(atk, me, weapon, false, true)}`, { kind: 'guard' });
-      add('회피', `명중률 절반, 반격 없음 · ${strikeText(atk, me, weapon, true, false)}`, { kind: 'evade' });
+      add('방어', `받는 피해 절반, 반격 없음 · ${strikeText(atk, me, weapon, { kind: 'guard' })}`, { kind: 'guard' });
+      add('회피', `명중률 절반, 반격 없음 · ${strikeText(atk, me, weapon, { kind: 'evade' })}`, { kind: 'evade' });
       box.appendChild(list);
       addEffectsToggle(box);
       show(resting());

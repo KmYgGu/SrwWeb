@@ -34,6 +34,15 @@ async function onBoardClick(e: MouseEvent) {
   await playerAct({ type: 'move', to: { x, y } });
 }
 
+function onContextMenu(e: MouseEvent) {
+  e.preventDefault();
+  const game = session.game;
+  if (session.busy || game.winner !== null) return;
+  const { x, y } = tileAt(e);
+  const unit = game.units.find((u) => samePos(u.pos, { x, y }));
+  if (unit) void showUnitInfo(unit);
+}
+
 async function onWeapon() {
   const game = session.game;
   if (session.busy || game.turn.side !== ME || game.turn.acted) return;
@@ -75,6 +84,12 @@ export function startBattle(a: RosterEntry, b: RosterEntry, mapId: string, onExi
         <canvas id="board"></canvas>
         <div class="corner me" id="meCorner"></div>
         <div class="corner foe" id="foeCorner"></div>
+        <div id="aiWait" hidden>상대 행동 중…</div>
+        <div id="mapLegend" aria-hidden="true">
+          <span class="leg move"><i></i>이동</span>
+          <span class="leg range-me"><i></i>내 사거리</span>
+          <span class="leg range-foe"><i></i>상대 사거리</span>
+        </div>
       </div>
     </div>
     <div class="details"><div class="side me" id="meInfo"></div><div class="side foe" id="foeInfo"></div></div>
@@ -87,6 +102,7 @@ export function startBattle(a: RosterEntry, b: RosterEntry, mapId: string, onExi
   const canvas = document.getElementById('board') as HTMLCanvasElement;
   initBoard(canvas);
   canvas.addEventListener('click', onBoardClick);
+  canvas.addEventListener('contextmenu', onContextMenu);
   document.getElementById('bAtk')!.addEventListener('click', onWeapon);
   document.getElementById('bSp')!.addEventListener('click', onSpirit);
   document.getElementById('bEnd')!.addEventListener('click', () => void playerAct({ type: 'wait' }));

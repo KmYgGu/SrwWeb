@@ -124,6 +124,12 @@ export interface Buffs {
   pierce: boolean;
 }
 
+/** HUD에 보이는 지속 효과. 정신/능력 적용 시 한 목록에만 등록한다. */
+export interface EffectTag {
+  id: SpiritId;
+  label: string;
+}
+
 export interface Unit {
   side: Side;
   def: UnitDef;
@@ -139,6 +145,8 @@ export interface Unit {
   /** 기력. 전투 중에만 변한다 */
   morale: number;
   buffs: Buffs;
+  /** 발동 중이라 HUD에 보여줄 효과(지속 정신). Buffs·이동력 보너스와 함께 갱신한다 */
+  effects: EffectTag[];
 }
 
 export interface TurnState {
