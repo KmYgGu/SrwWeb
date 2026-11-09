@@ -67,7 +67,9 @@ export type AbilityId =
   | 'barrier'
   | 'sniper'
   | 'regen'
-  | 'agile';
+  | 'agile'
+  | 'cutDown'
+  | 'shootDown';
 
 export type SpiritId =
   | 'sure'

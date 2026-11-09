@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { bestCounter, chooseDefense, decide, PROFILES } from '../ai/ai';
 import { ROSTER, RULES } from '../core/data';
-import { counterWeapons, fighterOf, maxStrikeDamage, worstLoss } from '../core/exchange';
+import { calcStrike, counterWeapons, exchangeLeaves, fighterOf, maxStrikeDamage, sampleExchange, worstLoss } from '../core/exchange';
 import { activeUnit, canMove, createGame, hasMoved, moveRange, perform, weaponStatus } from '../core/game';
 import { dist, keyPos, reachable, tileKey } from '../core/map';
 import { MORALE } from '../core/personalities';
@@ -282,6 +282,29 @@ const longbow = ROSTER.find((r) => r.unit.id === 'longbow')!;
   const rec = bestCounter(s, wi, PROFILES.balanced);
   assert.ok(rec !== null && usable.includes(rec), '추천 무기는 쓸 수 있는 반격 무기다');
   assert.ok(worstLoss(env, fa, fd, wi, { kind: 'counter', weapon: rec! }).atk.hp > 0, '반격하면 공격한 쪽도 맞을 수 있다');
+}
+
+// 5-9. 능력 발동: 베어내기는 격투 무기만 막고, 카운터로 먼저 친 공격은 기록에 능력이 남는다.
+{
+  const s = createGame(longbow, blazer, 1);
+  const [a, b] = s.units;
+  a.pos = { x: 6, y: 7 };
+  b.pos = { x: 6, y: 6 };
+  const env = { grid: s.grid };
+  const fa = fighterOf(a);
+  const fd = fighterOf(b);
+  const untouched = (wi: number) =>
+    exchangeLeaves(env, fa, fd, wi, { kind: 'guard' }).filter((l) => l.d.hp === fd.hp).reduce((sum, l) => sum + l.p, 0);
+  const missOf = (wi: number) => 1 - calcStrike(env, fa, fd, a.def.weapons[wi], false, true).hit;
+  const knife = a.def.weapons.findIndex((w) => w.kind === 'melee');
+  const rifle = a.def.weapons.findIndex((w) => w.kind === 'shoot' && !w.minMorale);
+  assert.ok(untouched(knife) > missOf(knife) + 0.1, '베어내기는 격투 무기를 막는다');
+  assert.ok(Math.abs(untouched(rifle) - missOf(rifle)) < 1e-9, '베어내기는 사격 무기를 막지 않는다');
+  const cw = counterWeapons(fd, fa)[0];
+  const leaf = sampleExchange(env, fa, fd, knife, { kind: 'counter', weapon: cw }, () => 0.99);
+  assert.equal(leaf.events[0].by, 1);
+  assert.equal(leaf.events[0].firstStrike, 'counter', '카운터로 먼저 친 공격에 능력이 기록된다');
+  assert.ok(leaf.events.slice(1).every((e) => !e.firstStrike), '나머지 공격에는 붙지 않는다');
 }
 
 // 6. 연출 시간: 이동은 거리와 상관없이 1초 이내, 조준선은 같은 칸 수에서 항상 이동보다 빠르다.

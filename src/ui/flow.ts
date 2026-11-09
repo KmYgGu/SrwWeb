@@ -7,6 +7,9 @@ import { dist, pathTo, reachable } from '../core/map';
 import type { Action, Side } from '../core/types';
 import { popText } from './board';
 import { askDefense } from './battleSheet';
+
+/** 능력이 발동했을 때 맵에 뜨는 글자 색 */
+const ABILITY_COLOR = '#7fe0ff';
 import { SPIRIT_FX_MS } from './spiritFx';
 import { AI_PROFILE, AIM_HOLD_MS, AIM_RESULT_MS, aimTravel, FOE, ME, moveDuration, session, sleep } from './session';
 
@@ -18,18 +21,26 @@ async function showEvents(events: StrikeEvent[], attacker: Side) {
     const striker = game.units[strikerSide];
     const target = game.units[1 - strikerSide];
     const travel = aimTravel(dist(striker.pos, target.pos));
+    // 먼저 치게 만든 능력(카운터 등)은 조준하기 전에 치는 쪽 위에 띄운다.
+    if (ev.firstStrike) {
+      popText(striker.pos.x, striker.pos.y, `${ABILITIES[ev.firstStrike].name}!`, ABILITY_COLOR);
+      await sleep(AIM_RESULT_MS);
+    }
     session.aim = { from: striker.pos, to: target.pos, side: strikerSide, t0: performance.now(), travel, hold: AIM_HOLD_MS };
     await sleep(travel + AIM_HOLD_MS);
     session.aim = null;
-    const text =
-      ev.result === 'hit'
-        ? String(ev.dmg)
-        : ev.result === 'miss'
-          ? 'MISS'
-          : ev.result === 'flash'
-            ? '섬광'
-            : ABILITIES[ev.ability!].name;
-    popText(target.pos.x, target.pos.y, text, ev.result === 'hit' ? '#ffd24a' : '#ffffff');
+    const { x, y } = target.pos;
+    if (ev.result === 'hit') {
+      popText(x, y, String(ev.dmg), '#ffd24a');
+      // 피해를 깎은 능력(실드 방어 등)은 숫자 위에 한 줄 더 띄운다.
+      if (ev.reducedBy) popText(x, y, ABILITIES[ev.reducedBy].name, ABILITY_COLOR, 1);
+    } else if (ev.result === 'miss') {
+      popText(x, y, 'MISS');
+    } else if (ev.result === 'flash') {
+      popText(x, y, '섬광');
+    } else {
+      popText(x, y, ABILITIES[ev.ability!].name, ABILITY_COLOR);
+    }
     await sleep(AIM_RESULT_MS);
   }
 }

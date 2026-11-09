@@ -13,6 +13,8 @@ export interface Floater {
   text: string;
   t0: number;
   color: string;
+  /** 같은 칸에 겹쳐 띄울 때 몇 줄 위에 그릴지 */
+  line: number;
 }
 
 /** 이동 연출. 규칙상 이동은 이미 끝난 일이고, 화면이 그 경로를 따라가며 보여주기만 한다. */

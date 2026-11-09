@@ -3,7 +3,7 @@
  * 규칙 코드는 능력 이름을 직접 검사하지 않고 아래 조회 함수만 부른다.
  * 새 능력 = 이 표에 항목 하나 + types.ts 의 AbilityId 에 이름 하나.
  */
-import type { AbilityId, PilotDef, WeaponDef } from './types';
+import type { AbilityId, PilotDef, WeaponDef, WeaponKind } from './types';
 
 export interface AbilityDef {
   name: string;
@@ -15,8 +15,8 @@ export interface AbilityDef {
   moveBonus?: number;
   rangeBonus?: (w: WeaponDef) => number;
   turnStart?: { hpRatio?: number; en?: number };
-  /** 명중한 공격을 확률로 무효화한다(EN 소비) */
-  dodge?: { chance: number; en: number };
+  /** 명중한 공격을 확률로 무효화한다(EN 소비). kinds 가 있으면 그 종류의 무기에만 발동한다 */
+  dodge?: { chance: number; en: number; kinds?: WeaponKind[] };
   /** 피해가 기준 이하면 무효화한다(EN 소비) */
   absorb?: { threshold: number; en: number };
   /** 확률로 피해를 깎는다. 확률은 파일럿 능력치에서 정한다 */
@@ -64,11 +64,22 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
     desc: '이동력 +1.',
     moveBonus: 1,
   },
+  cutDown: {
+    name: '베어내기',
+    desc: '명중한 격투 무기를 25% 확률로 무효화한다.',
+    dodge: { chance: 0.25, en: 0, kinds: ['melee'] },
+  },
+  shootDown: {
+    name: '쏴맞추기',
+    desc: '명중한 사격 무기를 25% 확률로 무효화한다.',
+    dodge: { chance: 0.25, en: 0, kinds: ['shoot'] },
+  },
 };
 
 const defsOf = (p: PilotDef): AbilityDef[] => p.abilities.map((id) => ABILITIES[id]);
 
-export const strikesFirstOnCounter = (p: PilotDef) => defsOf(p).some((a) => a.strikesFirstOnCounter);
+/** 반격 때 먼저 치게 해 주는 능력. 없으면 null */
+export const firstStrikeOf = (p: PilotDef): AbilityId | null => p.abilities.find((id) => ABILITIES[id].strikesFirstOnCounter) ?? null;
 export const movesAfterAttack = (p: PilotDef) => defsOf(p).some((a) => a.moveAfterAttack);
 export const moveBonusOf = (p: PilotDef) => defsOf(p).reduce((s, a) => s + (a.moveBonus ?? 0), 0);
 export const rangeBonusOf = (p: PilotDef, w: WeaponDef) =>

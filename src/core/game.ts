@@ -210,7 +210,7 @@ const DEFENSE_NAME = { counter: '반격', guard: '방어', evade: '회피' };
 function describe(ev: StrikeEvent, atk: Unit, def: Unit): string {
   const who = ev.by === 0 ? atk : def;
   const tgt = ev.by === 0 ? def : atk;
-  const head = `${who.def.name}의 ${ev.weapon}`;
+  const head = `${who.def.name}의 ${ev.firstStrike ? `${ABILITIES[ev.firstStrike].name}! ` : ''}${ev.weapon}`;
   switch (ev.result) {
     case 'miss':
       return `${head} - 빗나감`;

@@ -3,7 +3,7 @@
  * 실제 전투(sampleExchange)와 AI의 기대값 계산(exchangeLeaves)이 같은 strikeBranches 를 쓰므로
  * 규칙이 두 군데로 갈라지지 않는다.
  */
-import { rangeBonusOf, reactionsOf, strikesFirstOnCounter } from './abilities';
+import { firstStrikeOf, rangeBonusOf, reactionsOf } from './abilities';
 import { GRADE, RULES, TERRAINS } from './data';
 import { dist } from './map';
 import { clampMorale, MORALE, PERSONALITIES } from './personalities';
@@ -52,6 +52,8 @@ export interface StrikeEvent {
   ability?: AbilityId;
   /** 피해를 깎은 능력(실드 방어 등) */
   reducedBy?: AbilityId;
+  /** 이 공격을 먼저 치게 만든 능력(카운터 등) */
+  firstStrike?: AbilityId;
 }
 
 export interface Leaf {
@@ -179,6 +181,7 @@ interface Step {
   by: 0 | 1;
   weapon: number;
   tag: StrikeTag;
+  firstStrike?: AbilityId;
 }
 
 interface X {
@@ -196,8 +199,9 @@ interface Branch {
 function buildSteps(atk: Fighter, def: Fighter, wi: number, choice: DefenseChoice): Step[] {
   const steps: Step[] = [];
   const cw = choice.kind === 'counter' ? choice.weapon : -1;
-  const counterFirst = cw >= 0 && strikesFirstOnCounter(def.u.pilot);
-  if (counterFirst) steps.push({ by: 1, weapon: cw, tag: 'counter' });
+  const first = cw >= 0 ? firstStrikeOf(def.u.pilot) : null;
+  const counterFirst = first !== null;
+  if (first) steps.push({ by: 1, weapon: cw, tag: 'counter', firstStrike: first });
   steps.push({ by: 0, weapon: wi, tag: 'main' });
   if (cw >= 0 && !counterFirst) steps.push({ by: 1, weapon: cw, tag: 'counter' });
   const gap = atk.morale - def.morale;
@@ -244,7 +248,7 @@ function strikeBranches(env: Env, x: X, step: Step, choice: DefenseChoice, rec: 
     f[t] = { ...T, morale: clampMorale(T.morale + (isHit ? pt.onDamaged : pt.onDodge)) };
     const did: [boolean, boolean] = [x.did[0], x.did[1]];
     did[s] = true;
-    const ev = rec ? [...x.ev, { by: s, tag: step.tag, weapon: w.name, ...info }] : x.ev;
+    const ev = rec ? [...x.ev, { by: s, tag: step.tag, weapon: w.name, ...(step.firstStrike ? { firstStrike: step.firstStrike } : {}), ...info }] : x.ev;
     return { p, x: { f, did, ev } };
   };
 
@@ -259,7 +263,7 @@ function strikeBranches(env: Env, x: X, step: Step, choice: DefenseChoice, rec: 
 
   // 확률로 무효화(분신 등). 막지 못한 쪽은 EN 을 쓰지 않는다.
   for (const r of reactionsOf(pilot, 'dodge')) {
-    if (T0.en < r.def.en) continue;
+    if (T0.en < r.def.en || (r.def.kinds && !r.def.kinds.includes(w.kind))) continue;
     const pn = pRem * r.def.chance;
     out.push(make(pn, { ...T0, en: T0.en - r.def.en }, { result: 'negated', dmg: 0, ability: r.id }));
     pRem -= pn;

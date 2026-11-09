@@ -80,7 +80,7 @@ export const ROSTER: RosterEntry[] = [
       defense: 95,
       sp: 110,
       spirits: ['sure', 'passion', 'fortitude', 'focus', 'spirit', 'repair'],
-      abilities: ['counter', 'shield'],
+      abilities: ['counter', 'shield', 'cutDown'],
     },
   },
   {
@@ -113,7 +113,7 @@ export const ROSTER: RosterEntry[] = [
       defense: 80,
       sp: 110,
       spirits: ['sure', 'flash', 'focus', 'haste', 'spirit', 'supply'],
-      abilities: ['sniper', 'hitAway'],
+      abilities: ['sniper', 'hitAway', 'shootDown'],
     },
   },
   {

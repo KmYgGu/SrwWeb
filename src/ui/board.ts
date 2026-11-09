@@ -37,8 +37,8 @@ export function tileAt(e: MouseEvent): { x: number; y: number } {
   return { x: Math.floor((e.clientX - rect.left) / tile), y: Math.floor((e.clientY - rect.top) / tile) };
 }
 
-export function popText(x: number, y: number, text: string, color = '#ffffff') {
-  session.floaters.push({ x, y, text, t0: performance.now(), color });
+export function popText(x: number, y: number, text: string, color = '#ffffff', line = 0) {
+  session.floaters.push({ x, y, text, t0: performance.now(), color, line });
 }
 
 export function draw() {
@@ -252,7 +252,11 @@ function drawFloaters() {
     g.fillStyle = f.color;
     g.font = `bold ${tile * 0.42}px sans-serif`;
     g.textAlign = 'center';
-    g.fillText(f.text, f.x * tile + tile / 2, f.y * tile + tile * 0.4 - p * tile * 0.5);
+    // 능력 이름처럼 긴 글자가 맵 가장자리에서 잘리지 않게 안쪽으로 당긴다.
+    const half = g.measureText(f.text).width / 2;
+    const x = Math.min(tile * GRID_W - half, Math.max(half, f.x * tile + tile / 2));
+    const y = Math.max(tile * 0.45, f.y * tile + tile * 0.4 - f.line * tile * 0.48 - p * tile * 0.5);
+    g.fillText(f.text, x, y);
     g.globalAlpha = 1;
   }
 }
