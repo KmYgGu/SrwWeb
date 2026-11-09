@@ -270,22 +270,22 @@ export function chooseAttack(): Promise<number | null> {
 }
 
 /**
- * 상대의 공격을 받을 때 반격·방어·회피를 고른다. 창을 닫으면 방어로 처리한다.
- * 반격은 버튼 하나에 추천 무기를 띄워 두고, 휠이나 드래그로 다른 무기로 바꾼다.
- * 두 카드는 지금 보고 있는 선택의 결과를 보여 준다. 방어·회피 위에 올리거나 누르는 동안은 그 결과로 바뀐다.
+ * 대응 시트 한 번. 배경(여백)을 누르면 null — 맵으로 돌아가 정신을 쓸 수 있게 한다(자동 방어 아님).
+ * 시트를 다시 열면 그 시점의 정신 효과가 forecast 에 반영된다.
  */
-export async function askDefense(weapon: number): Promise<DefenseChoice> {
+function showDefenseSheet(weapon: number): Promise<DefenseChoice | null> {
   const game = session.game;
   const atk = activeUnit(game);
   const me = game.units[ME];
   const w = atk.def.weapons[weapon];
+  // 열 때마다 최신 상태(정신 사용 후 효과 포함)로 다시 계산한다.
   const env = envOf(game);
   const fa = fighterOf(atk);
   const fd = fighterOf(me);
   const counters = counterWeapons(fd, fa);
   const recommended = bestCounter(game, weapon, AI_PROFILE);
   const lost = (choice: DefenseChoice) => worstLoss(env, fa, fd, weapon, choice).def.hp >= me.hp;
-  const r = await sheet<DefenseChoice>(
+  return sheet<DefenseChoice>(
     `${atk.def.name}의 ${w.name} — 어떻게 받을까?`,
     (close, box) => {
       box.insertAdjacentHTML('beforeend', duel(me, atk));
@@ -341,10 +341,38 @@ export async function askDefense(weapon: number): Promise<DefenseChoice> {
       add('방어', `받는 피해 절반, 반격 없음 · ${strikeText(atk, me, weapon, { kind: 'guard' })}`, { kind: 'guard' });
       add('회피', `명중률 절반, 반격 없음 · ${strikeText(atk, me, weapon, { kind: 'evade' })}`, { kind: 'evade' });
       box.appendChild(list);
+      const tip = document.createElement('p');
+      tip.className = 'note';
+      tip.textContent = '여백을 누르면 맵으로 돌아가 정신을 쓸 수 있습니다.';
+      box.appendChild(tip);
       addEffectsToggle(box);
       show(resting());
     },
     { tall: true },
   );
-  return r ?? { kind: 'guard' };
+}
+
+/**
+ * 상대의 공격을 받을 때 반격·방어·회피를 고른다.
+ * 여백을 누르면 시트를 닫고 맵으로 돌아간다(자동 방어 아님). 그 동안 AI 는 대기하고,
+ * '대응 선택'으로 시트를 다시 열 수 있다. 정신을 쓴 뒤 다시 열면 예측이 갱신된다.
+ */
+export async function askDefense(weapon: number): Promise<DefenseChoice> {
+  for (;;) {
+    const r = await showDefenseSheet(weapon);
+    if (r !== null) {
+      session.awaitingReaction = null;
+      return r;
+    }
+    // 맵으로 복귀: 정신·시트 재오픈만 허용. AI Promise 는 여기서 멈춘 채 유지.
+    await new Promise<void>((resume) => {
+      session.awaitingReaction = {
+        weapon,
+        reopen: () => {
+          session.awaitingReaction = null;
+          resume();
+        },
+      };
+    });
+  }
 }

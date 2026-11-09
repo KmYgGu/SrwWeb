@@ -200,7 +200,7 @@ function startRoulette(app: HTMLElement, onStart: Start) {
     i = (i + 1) % pool.length;
     const cur = pool[i];
     if (roulette) roulette.current = cur;
-    showPeek(app, cur, '랜덤 추첨 중 — 다시 누르면 확정');
+    showPeek(app, cur, '랜덤 추첨 중 — 클릭하면 확정');
     paint(app);
   };
   const current = pool[i];
@@ -208,9 +208,21 @@ function startRoulette(app: HTMLElement, onStart: Start) {
     current,
     timer: window.setInterval(tick, ROULETTE_MS),
   };
-  showPeek(app, current, '랜덤 추첨 중 — 다시 누르면 확정');
+  showPeek(app, current, '랜덤 추첨 중 — 클릭·탭하면 확정');
   paint(app);
   void onStart;
+}
+
+function flashStop(app: HTMLElement) {
+  const tile = app.querySelector<HTMLElement>('[data-unit="random"]');
+  const slot = app.querySelector<HTMLElement>('[data-slot="foe"]');
+  for (const el of [tile, slot]) {
+    if (!el) continue;
+    el.classList.remove('roulette-stop');
+    // reflow so animation restarts
+    void el.offsetWidth;
+    el.classList.add('roulette-stop');
+  }
 }
 
 function stopRouletteAndLock(app: HTMLElement, onStart: Start) {
@@ -218,13 +230,22 @@ function stopRouletteAndLock(app: HTMLElement, onStart: Start) {
   const chosen = roulette.current;
   stopRoulette();
   pickFoe = chosen;
+  flashStop(app);
   showPeek(app, chosen);
   paint(app);
   tryOpenStage(app, onStart);
 }
 
+/** 호버를 떠나 취소: 확정하지 않고 룰렛만 끈다. */
+function cancelRoulette(app: HTMLElement) {
+  if (!roulette) return;
+  stopRoulette();
+  pickFoe = null;
+  paint(app);
+}
+
 function choose(app: HTMLElement, value: string, onStart: Start) {
-  // 룰렛이 도는 중 랜덤을 다시 누르면 그 자리에서 확정한다.
+  // 룰렛이 도는 중 랜덤을 누르면 그 자리에서 멈추며 확정(+스톱 연출).
   if (value === RANDOM && roulette) {
     stopRouletteAndLock(app, onStart);
     return;
@@ -242,6 +263,7 @@ function choose(app: HTMLElement, value: string, onStart: Start) {
     activeSlot = 'foe';
   } else {
     if (value === RANDOM) {
+      // 터치 등 호버 없는 입력: 탭으로 시작(두 번째 탭에서 위의 분기로 확정).
       startRoulette(app, onStart);
       return;
     }
@@ -281,11 +303,22 @@ export function showTitle(onStart: Start) {
       choose(app, id, onStart);
     });
     b.addEventListener('pointerenter', (e) => {
-      if (e.pointerType !== 'mouse' || roulette) return;
+      if (e.pointerType !== 'mouse') return;
       const id = b.dataset.unit!;
-      if (id === RANDOM) return;
+      // 상대 슬롯이 활성일 때 랜덤에 호버하면 즉시 룰렛 시작
+      if (id === RANDOM) {
+        if (activeSlot === 'foe' && !roulette && pickFoe === null) startRoulette(app, onStart);
+        return;
+      }
+      if (roulette) return;
       const unit = ROSTER.find((r) => r.id === id);
       if (unit) showPeek(app, unit);
+    });
+    b.addEventListener('pointerleave', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      if (b.dataset.unit !== RANDOM) return;
+      // 클릭으로 확정하기 전에 호버를 떠나면 취소(확정 안 함)
+      if (roulette && pickFoe === null) cancelRoulette(app);
     });
   });
   paint(app);

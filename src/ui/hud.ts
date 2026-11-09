@@ -1,5 +1,5 @@
 import { ABILITIES } from '../core/abilities';
-import { anyCastable, weaponStatus } from '../core/game';
+import { anyCastable, anyCastableFor, weaponStatus } from '../core/game';
 import { PERSONALITIES } from '../core/personalities';
 import { activeEffectLabels } from '../core/spirits';
 import type { Unit } from '../core/types';
@@ -14,11 +14,11 @@ const portraitUrl = (u: Unit) => `${import.meta.env.BASE_URL}portraits/${u.pilot
 const gauge = (kind: 'hp' | 'en', label: string, cur: number, max: number) =>
   `<div class="gauge"><b>${label}</b><div class="bar ${kind}"><i style="width:${(cur / max) * 100}%"></i><span>${cur}</span></div></div>`;
 
-/** 초상화 옆 세로 SP 막대. 숫자는 막대 아래(잘리지 않게). */
+/** 초상화 옆 세로 SP 막대. 숫자는 막대 위. */
 const spBar = (u: Unit) => {
   const max = u.pilot.sp;
   const pct = max <= 0 ? 0 : (u.sp / max) * 100;
-  return `<div class="spwrap" title="SP ${u.sp}/${max}"><div class="spbar"><i style="height:${pct}%"></i></div><span class="spnum">${u.sp}</span></div>`;
+  return `<div class="spwrap" title="SP ${u.sp}/${max}"><span class="spnum">${u.sp}</span><div class="spbar"><i style="height:${pct}%"></i></div></div>`;
 };
 
 function corner(u: Unit, side: 'me' | 'foe'): string {
@@ -58,9 +58,10 @@ export function refreshHud() {
   const game = session.game;
   const me = game.units[ME];
   const foe = game.units[FOE];
-  const mine = game.turn.side === ME && !session.busy && game.winner === null;
+  const reacting = session.awaitingReaction !== null;
+  const mine = game.turn.side === ME && !session.busy && game.winner === null && !reacting;
   const html = [corner(me, 'me'), corner(foe, 'foe'), info(me), info(foe)];
-  const key = `${html.join('|')}|${mine}|${game.turn.acted}|${game.log.length}|${me.pos.x},${me.pos.y},${foe.pos.x},${foe.pos.y}|${session.busy}|${game.turn.side}`;
+  const key = `${html.join('|')}|${mine}|${reacting}|${game.turn.acted}|${game.log.length}|${me.pos.x},${me.pos.y},${foe.pos.x},${foe.pos.y}|${session.busy}|${game.turn.side}|${me.sp}|${me.used.join(',')}`;
   if (key === last) return;
   last = key;
   $('meCorner').innerHTML = html[0];
@@ -76,18 +77,36 @@ export function refreshHud() {
     })
     .join('');
   log.scrollTop = log.scrollHeight;
+
   const atk = $('bAtk') as HTMLButtonElement;
-  atk.disabled = !mine || game.turn.acted;
-  // 지금 자리에서 쓸 수 있는 무기가 있으면 공격 버튼 색을 바꿔 알린다(이동한 뒤 닿는지 바로 알 수 있다).
-  atk.classList.toggle('ready', mine && !game.turn.acted && me.def.weapons.some((_, i) => weaponStatus(game, me, i) === 'ok'));
-  ($('bSp') as HTMLButtonElement).disabled = !mine || !anyCastable(game);
+  const sp = $('bSp') as HTMLButtonElement;
   const end = $('bEnd') as HTMLButtonElement;
-  end.disabled = !mine;
-  // 공격을 마쳤으면 턴 종료가 다음 할 일이라는 걸 눈에 띄게 한다.
-  end.classList.toggle('primary', mine && game.turn.acted);
+
+  if (reacting) {
+    // 대응 대기: 이동·공격·턴종료 불가. 정신 + 대응 선택.
+    atk.disabled = true;
+    atk.classList.remove('ready');
+    sp.disabled = !anyCastableFor(game, ME);
+    end.disabled = false;
+    end.textContent = '대응 선택';
+    end.classList.add('primary');
+  } else {
+    atk.disabled = !mine || game.turn.acted;
+    atk.classList.toggle('ready', mine && !game.turn.acted && me.def.weapons.some((_, i) => weaponStatus(game, me, i) === 'ok'));
+    sp.disabled = !mine || !anyCastable(game);
+    end.disabled = !mine;
+    end.textContent = '턴 종료';
+    end.classList.toggle('primary', mine && game.turn.acted);
+  }
 
   const wait = document.getElementById('aiWait');
-  if (wait) wait.hidden = !(session.busy && game.turn.side === FOE && game.winner === null);
+  if (wait) {
+    // 대응 대기 또는 일반 AI 턴에 '상대의 턴입니다' 표시
+    const show = reacting || (session.busy && game.turn.side === FOE && game.winner === null);
+    wait.hidden = !show;
+    wait.textContent = '상대의 턴입니다';
+    wait.classList.toggle('reacting', reacting);
+  }
 }
 
 export function resetHud() {

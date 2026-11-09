@@ -1,9 +1,9 @@
 import { fighterOf, forecastStrike, type DefenseChoice } from '../core/exchange';
-import { activeUnit, castable, envOf } from '../core/game';
+import { castableFor, envOf } from '../core/game';
 import { SPIRITS } from '../core/spirits';
-import type { SpiritId, Unit } from '../core/types';
+import type { Side, SpiritId, Unit } from '../core/types';
 import { saveSettings, settings } from './settings';
-import { session } from './session';
+import { ME, session } from './session';
 
 /**
  * 아래에서 올라오는 선택창. 고르면 값을, 바깥을 누르면 null 을 돌려준다.
@@ -59,16 +59,17 @@ export function strikeText(atk: Unit, def: Unit, wi: number, choice: DefenseChoi
   return `명중 ${Math.round(f.hit * 100)}% · 피해 ${f.dmg} · 예상 대응: ${f.reaction}`;
 }
 
-export function pickSpirit(): Promise<SpiritId | null> {
+/** side 기본값은 나(ME). 대응 대기 중에도 내 유닛 정신을 고른다. */
+export function pickSpirit(side: Side = ME): Promise<SpiritId | null> {
   const game = session.game;
-  const me = activeUnit(game);
-  return sheet<SpiritId>(`정신 커맨드 (SP ${me.sp})`, (close, box) => {
-    for (const id of me.pilot.spirits) {
+  const u = game.units[side];
+  return sheet<SpiritId>(`정신 커맨드 (SP ${u.sp})`, (close, box) => {
+    for (const id of u.pilot.spirits) {
       const d = SPIRITS[id];
       const b = document.createElement('button');
       b.className = 'opt';
-      b.disabled = !castable(game, id);
-      b.innerHTML = `<b>${d.name}</b> SP ${d.cost}${me.used.includes(id) ? ' · 사용함' : ''}<small>${d.desc}</small>`;
+      b.disabled = !castableFor(game, side, id);
+      b.innerHTML = `<b>${d.name}</b> SP ${d.cost}${u.used.includes(id) ? ' · 사용함' : ''}<small>${d.desc}</small>`;
       b.addEventListener('click', () => close(id));
       box.appendChild(b);
     }

@@ -1,13 +1,15 @@
-import { canMove, createGame, moveRange } from '../core/game';
+import { applySpiritFor, canMove, castableFor, createGame, moveRange } from '../core/game';
 import { samePos, tileKey } from '../core/map';
-import type { RosterEntry } from '../core/types';
+import { SPIRITS } from '../core/spirits';
+import type { RosterEntry, SpiritId } from '../core/types';
 import { draw, initBoard, layout, tileAt } from './board';
-import { playerAct, setFinishHandler } from './flow';
+import { playerAct, setFinishHandler, showAim } from './flow';
 import { refreshHud, resetHud } from './hud';
 import { chooseAttack } from './battleSheet';
 import { pickSpirit } from './sheets';
 import { showUnitInfo } from './unitInfo';
-import { ME, session } from './session';
+import { FOE, ME, session, sleep } from './session';
+import { SPIRIT_FX_MS } from './spiritFx';
 
 const app = () => document.getElementById('app')!;
 
@@ -19,16 +21,21 @@ function frame() {
   requestAnimationFrame(frame);
 }
 
+/** 연출/AI 중이어도 대응 대기(맵에서 정신)면 유닛 정보·정신은 허용 */
+const inputLocked = () => session.busy && !session.awaitingReaction;
+
 async function onBoardClick(e: MouseEvent) {
   const game = session.game;
-  if (session.busy || game.winner !== null) return;
+  if (game.winner !== null) return;
   const { x, y } = tileAt(e);
-  // 유닛이 선 칸을 누르면 그 유닛의 정보를 보여 준다(내 유닛이든 상대든).
+  // 유닛 정보: 대응 대기 중에도 허용. 일반 busy(이동·AI 연출) 중에는 막음.
   const unit = game.units.find((u) => samePos(u.pos, { x, y }));
   if (unit) {
+    if (session.busy && !session.awaitingReaction) return;
     await showUnitInfo(unit);
     return;
   }
+  if (inputLocked() || session.awaitingReaction) return;
   if (game.turn.side !== ME || !canMove(game)) return;
   if (!moveRange(game).has(tileKey(x, y))) return;
   await playerAct({ type: 'move', to: { x, y } });
@@ -37,7 +44,8 @@ async function onBoardClick(e: MouseEvent) {
 function onContextMenu(e: MouseEvent) {
   e.preventDefault();
   const game = session.game;
-  if (session.busy || game.winner !== null) return;
+  if (game.winner !== null) return;
+  if (session.busy && !session.awaitingReaction) return;
   const { x, y } = tileAt(e);
   const unit = game.units.find((u) => samePos(u.pos, { x, y }));
   if (unit) void showUnitInfo(unit);
@@ -45,15 +53,47 @@ function onContextMenu(e: MouseEvent) {
 
 async function onWeapon() {
   const game = session.game;
-  if (session.busy || game.turn.side !== ME || game.turn.acted) return;
+  if (session.busy || session.awaitingReaction || game.turn.side !== ME || game.turn.acted) return;
+  // 내 공격: 조준 → 공격 시트 → 확정 시 판정·결과
+  session.busy = true;
+  const me = game.units[ME];
+  const foe = game.units[FOE];
+  await showAim(me.pos, foe.pos, ME);
+  session.busy = false;
   const weapon = await chooseAttack();
   if (weapon !== null) await playerAct({ type: 'attack', weapon });
 }
 
+async function castSpiritAsMe(id: SpiritId) {
+  const game = session.game;
+  if (!castableFor(game, ME, id)) return;
+  applySpiritFor(game, ME, id);
+  game.log.push(`${game.units[ME].def.name}: 「${SPIRITS[id].name}」`);
+  session.spiritFx = { side: ME, id, t0: performance.now() };
+  await sleep(SPIRIT_FX_MS);
+  session.spiritFx = null;
+}
+
 async function onSpirit() {
-  if (session.busy || session.game.turn.side !== ME) return;
-  const id = await pickSpirit();
+  const game = session.game;
+  if (game.winner !== null) return;
+  // 대응 대기: 내 유닛 기준으로 정신 사용(액티브가 적이어도)
+  if (session.awaitingReaction) {
+    const id = await pickSpirit(ME);
+    if (id !== null) await castSpiritAsMe(id);
+    return;
+  }
+  if (session.busy || game.turn.side !== ME) return;
+  const id = await pickSpirit(ME);
   if (id !== null) await playerAct({ type: 'spirit', id });
+}
+
+function onEndOrReact() {
+  if (session.awaitingReaction) {
+    session.awaitingReaction.reopen();
+    return;
+  }
+  void playerAct({ type: 'wait' });
 }
 
 function showResult(onExit: () => void) {
@@ -77,6 +117,7 @@ export function startBattle(a: RosterEntry, b: RosterEntry, mapId: string, onExi
   session.game = createGame(a, b, (Math.random() * 2 ** 31) | 0, mapId);
   session.floaters.length = 0;
   session.busy = false;
+  session.awaitingReaction = null;
   resetHud();
   app().innerHTML = `
     <div id="boardWrap">
@@ -84,7 +125,7 @@ export function startBattle(a: RosterEntry, b: RosterEntry, mapId: string, onExi
         <canvas id="board"></canvas>
         <div class="corner me" id="meCorner"></div>
         <div class="corner foe" id="foeCorner"></div>
-        <div id="aiWait" hidden>상대 행동 중…</div>
+        <div id="aiWait" hidden>상대의 턴입니다</div>
         <div id="mapLegend" aria-hidden="true">
           <span class="leg move"><i></i>이동</span>
           <span class="leg range-me"><i></i>내 사거리</span>
@@ -105,7 +146,7 @@ export function startBattle(a: RosterEntry, b: RosterEntry, mapId: string, onExi
   canvas.addEventListener('contextmenu', onContextMenu);
   document.getElementById('bAtk')!.addEventListener('click', onWeapon);
   document.getElementById('bSp')!.addEventListener('click', onSpirit);
-  document.getElementById('bEnd')!.addEventListener('click', () => void playerAct({ type: 'wait' }));
+  document.getElementById('bEnd')!.addEventListener('click', onEndOrReact);
   resizeHandler = layout;
   window.addEventListener('resize', resizeHandler);
   setFinishHandler(() => showResult(onExit));

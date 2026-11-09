@@ -156,34 +156,54 @@ export function moveRange(s: GameState): Map<number, ReachNode> {
   return reach;
 }
 
-const effectCtx = (s: GameState, u: Unit, spiritId: SpiritId): EffectCtx => ({
+const effectCtx = (s: GameState, u: Unit, spiritId: SpiritId, sideIsActive: boolean): EffectCtx => ({
   unit: u,
   turn: s.turn,
   baseMove: baseMove(u),
-  canMove: canMove(s),
+  // 비액티브 쪽은 이번 턴 이동권·행동권이 없으므로 신속/재동 usable 이 false 가 된다.
+  canMove: sideIsActive && canMove(s),
   spiritId,
 });
 
-export function castable(s: GameState, id: SpiritId): boolean {
-  const u = activeUnit(s);
+/**
+ * 특정 진영 유닛이 그 정신을 쓸 수 있는가.
+ * 평소에는 액티브만 쓰지만, 상대 공격 대응 중에는 방어 쪽(나)도 쓸 수 있게 한다.
+ * 턴 상태(moveBudget·acted)를 건드리는 신속·재동은 자기 턴이 아니면 막는다.
+ */
+export function castableFor(s: GameState, side: Side, id: SpiritId): boolean {
+  const u = s.units[side];
   const def = SPIRITS[id];
   if (s.winner !== null || !u.pilot.spirits.includes(id) || u.used.includes(id) || u.sp < def.cost) return false;
-  return handlerOf(def.effect).usable?.(def.effect, effectCtx(s, u, id)) ?? true;
+  const t = def.effect.t;
+  if ((t === 'move' || t === 'again') && side !== s.turn.side) return false;
+  return handlerOf(def.effect).usable?.(def.effect, effectCtx(s, u, id, side === s.turn.side)) ?? true;
+}
+
+export function castable(s: GameState, id: SpiritId): boolean {
+  return castableFor(s, s.turn.side, id);
+}
+
+export function anyCastableFor(s: GameState, side: Side): boolean {
+  return s.units[side].pilot.spirits.some((id) => castableFor(s, side, id));
 }
 
 export function anyCastable(s: GameState): boolean {
-  return activeUnit(s).pilot.spirits.some((id) => castable(s, id));
+  return anyCastableFor(s, s.turn.side);
 }
 
-export function applySpirit(s: GameState, id: SpiritId) {
-  const u = activeUnit(s);
+export function applySpiritFor(s: GameState, side: Side, id: SpiritId) {
+  const u = s.units[side];
   const def = SPIRITS[id];
   u.sp -= def.cost;
   u.used.push(id);
   const h = handlerOf(def.effect);
-  h.apply(def.effect, effectCtx(s, u, id));
+  h.apply(def.effect, effectCtx(s, u, id, side === s.turn.side));
   // 지속 효과는 규칙 상태와 별도로 HUD 목록에 등록한다(신속처럼 Buffs 에 안 남는 것도 여기로).
   if (h.lasting) addEffect(u, id, def.name);
+}
+
+export function applySpirit(s: GameState, id: SpiritId) {
+  applySpiritFor(s, s.turn.side, id);
 }
 
 /** 지금 위치에서 쓸 수 있는 무기 번호와 그 이유(UI 표시용) */

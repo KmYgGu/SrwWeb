@@ -4,7 +4,7 @@ import { chooseDefense, decide } from '../ai/ai';
 import type { DefenseChoice, StrikeEvent } from '../core/exchange';
 import { activeUnit, foeUnit, perform } from '../core/game';
 import { dist, pathTo, reachable } from '../core/map';
-import type { Action, Side } from '../core/types';
+import type { Action, Pos, Side } from '../core/types';
 import { popText } from './board';
 import { askDefense } from './battleSheet';
 
@@ -13,26 +13,34 @@ const ABILITY_COLOR = '#7fe0ff';
 import { SPIRIT_FX_MS } from './spiritFx';
 import { AI_PROFILE, AIM_HOLD_MS, AIM_RESULT_MS, aimTravel, FOE, ME, moveDuration, session, sleep } from './session';
 
-/** 공방의 한 번 한 번마다 조준선이 날아가고, 도착해 멈춘 뒤에 결과가 뜬다. */
-async function showEvents(events: StrikeEvent[], attacker: Side) {
+/** 조준선만 날린다(결과 글자 없음). 시트·판정 전에 쓴다. */
+export async function showAim(from: Pos, to: Pos, side: Side) {
+  const travel = aimTravel(dist(from, to));
+  session.aim = { from, to, side, t0: performance.now(), travel, hold: AIM_HOLD_MS };
+  await sleep(travel + AIM_HOLD_MS);
+  session.aim = null;
+}
+
+/**
+ * 공방 결과 글자. 본 공격 조준은 시트 전에 이미 보여 줬다.
+ * 반격(ev.by === 1)만 짧은 조준을 한 번 더 보여 준다.
+ */
+async function showResults(events: StrikeEvent[], attacker: Side) {
   const game = session.game;
   for (const ev of events) {
     const strikerSide = (ev.by === 0 ? attacker : 1 - attacker) as Side;
     const striker = game.units[strikerSide];
     const target = game.units[1 - strikerSide];
-    const travel = aimTravel(dist(striker.pos, target.pos));
-    // 먼저 치게 만든 능력(카운터 등)은 조준하기 전에 치는 쪽 위에 띄운다.
     if (ev.firstStrike) {
       popText(striker.pos.x, striker.pos.y, `${ABILITIES[ev.firstStrike].name}!`, ABILITY_COLOR);
       await sleep(AIM_RESULT_MS);
     }
-    session.aim = { from: striker.pos, to: target.pos, side: strikerSide, t0: performance.now(), travel, hold: AIM_HOLD_MS };
-    await sleep(travel + AIM_HOLD_MS);
-    session.aim = null;
+    if (ev.by === 1) {
+      await showAim(striker.pos, target.pos, strikerSide);
+    }
     const { x, y } = target.pos;
     if (ev.result === 'hit') {
       popText(x, y, String(ev.dmg), '#ffd24a');
-      // 피해를 깎은 능력(실드 방어 등)은 숫자 위에 한 줄 더 띄운다.
       if (ev.reducedBy) popText(x, y, ABILITIES[ev.reducedBy].name, ABILITY_COLOR, 1);
     } else if (ev.result === 'miss') {
       popText(x, y, 'MISS');
@@ -70,7 +78,7 @@ async function exec(act: Action, defense?: DefenseChoice) {
     await sleep(SPIRIT_FX_MS);
     session.spiritFx = null;
   }
-  if (r.events.length) await showEvents(r.events, r.attacker);
+  if (r.events.length) await showResults(r.events, r.attacker);
 }
 
 async function runAi() {
@@ -81,12 +89,21 @@ async function runAi() {
     await sleep(500);
     for (const act of decide(game, AI_PROFILE)) {
       if (game.turn.side !== FOE || game.winner !== null) break;
-      const defense = act.type === 'attack' ? await askDefense(act.weapon) : undefined;
-      await exec(act, defense);
+      if (act.type === 'attack') {
+        const atk = activeUnit(game);
+        const me = game.units[ME];
+        // 적 공격: 조준 → 대응 시트 → 판정 → 결과
+        await showAim(atk.pos, me.pos, FOE);
+        const defense = await askDefense(act.weapon);
+        await exec(act, defense);
+      } else {
+        await exec(act);
+      }
       await sleep(250);
     }
   }
   session.busy = false;
+  session.awaitingReaction = null;
 }
 
 const turnSide = () => session.game.turn.side;
@@ -103,6 +120,7 @@ export async function playerAct(act: Action) {
   const game = session.game;
   if (session.busy || game.turn.side !== ME || game.winner !== null) return;
   session.busy = true;
+  // 내 공격: 조준·시트는 onWeapon 쪽에서 이미 끝남 → 판정 → 결과
   await exec(act, act.type === 'attack' ? chooseDefense(game, act.weapon, AI_PROFILE) : undefined);
   session.busy = false;
   // 위에서 좁혀진 타입은 await 을 거치며 달라졌으므로 함수로 다시 읽는다.

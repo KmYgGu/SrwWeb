@@ -52,6 +52,16 @@ export const AIM_HOLD_MS = 220;
 export const AIM_RESULT_MS = 380;
 export const aimTravel = (tiles: number) => Math.min(AIM_MS_MAX, Math.max(AIM_MS_MIN, tiles * AIM_MS_PER_TILE));
 
+/**
+ * 상대 공격 대응 시트에서 배경을 눌러 맵으로 돌아온 상태.
+ * AI 의 askDefense Promise 는 여전히 대기 중이고, 정신 사용·시트 재오픈만 허용한다.
+ */
+export interface AwaitingReaction {
+  weapon: number;
+  /** '대응 선택' 을 누르면 시트를 다시 연다 */
+  reopen: () => void;
+}
+
 /** 화면 여러 모듈이 같이 보는 진행 상태 */
 export const session = {
   game: null as unknown as GameState,
@@ -62,6 +72,8 @@ export const session = {
   aim: null as AimAnim | null,
   /** 지금 보여 주는 정신 커맨드 이펙트 */
   spiritFx: null as { side: Side; id: SpiritId; t0: number } | null,
+  /** 상대 공격 중 맵에서 정신을 쓰는 대기 상태(없으면 null) */
+  awaitingReaction: null as AwaitingReaction | null,
 };
 
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

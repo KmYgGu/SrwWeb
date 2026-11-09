@@ -10,7 +10,15 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, 'Malgun Gothic', sans-serif; }
-#app { height: 100dvh; max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+:root { --app-max: 520px; }
+/* 좁은 화면(폰)은 기존 520px, 넓은 화면은 가용 폭을 써서 맵 타일을 키운다 */
+@media (min-width: 900px) {
+  :root { --app-max: min(96vw, 1100px); }
+}
+@media (min-width: 1400px) {
+  :root { --app-max: min(96vw, 1280px); }
+}
+#app { height: 100dvh; width: 100%; max-width: var(--app-max); margin: 0 auto; display: flex; flex-direction: column; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
 button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-height: 44px; }
 button:disabled { opacity: 0.4; }
 button.primary { background: #2b5fd0; border-color: #3f78f0; }
@@ -55,7 +63,7 @@ button.primary { background: #2b5fd0; border-color: #3f78f0; }
 
 /* 양쪽 유닛을 다 고르면 위에 뜨는 스테이지 패널 */
 .stage-back { position: fixed; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(0, 0, 0, 0.6); }
-.stage-panel { width: 100%; max-width: 496px; height: min(100%, 680px); display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.stage-panel { width: 100%; max-width: min(496px, var(--app-max)); height: min(100%, 680px); display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .stage-panel h2 { margin: 0; font-size: 15px; text-align: center; }
 .stage-row { flex: 1; min-height: 0; display: flex; align-items: center; gap: 6px; }
 .arrow { flex: none; width: 44px; align-self: stretch; padding: 0; font-size: 22px; font-weight: 700; }
@@ -117,7 +125,7 @@ canvas { touch-action: manipulation; display: block; }
 
 .sheet { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); display: flex; align-items: flex-end; justify-content: center; z-index: 5; }
 .sheet > div.tall { max-height: 94dvh; }
-.sheet > div { width: 100%; max-width: 520px; background: var(--panel); border-radius: 14px 14px 0 0; padding: 12px; max-height: 75dvh; overflow-y: auto; }
+.sheet > div { width: 100%; max-width: var(--app-max); background: var(--panel); border-radius: 14px 14px 0 0; padding: 12px; max-height: 75dvh; overflow-y: auto; }
 .sheet h3 { margin: 0 0 8px; font-size: 15px; }
 .opt { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
 .opt small { display: block; color: var(--dim); }
@@ -185,13 +193,18 @@ canvas { touch-action: manipulation; display: block; }
 .ucard .figure::after { content: 'ⓘ 상세'; position: absolute; right: 6px; bottom: 6px; padding: 1px 6px; border-radius: 8px; background: rgba(5, 8, 16, 0.7); color: var(--dim); font-size: 10px; pointer-events: none; }
 
 
-/* 상대 AI 턴 안내 */
+/* 상대 턴 / 대응 대기 안내 — 범례 아래에 두어 겹치지 않게 */
 #aiWait {
-  position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+  position: absolute; left: 50%; top: 34px; transform: translateX(-50%);
   z-index: 3; pointer-events: none;
   padding: 6px 14px; border-radius: 999px;
   background: rgba(5, 8, 16, 0.82); border: 1px solid var(--line);
   font-size: 13px; font-weight: 700; letter-spacing: 0.02em; color: #ffd24a;
+  white-space: nowrap;
+}
+#aiWait.reacting {
+  border-color: #ffd24a;
+  box-shadow: 0 0 0 1px rgba(255, 210, 74, 0.35);
 }
 
 /* 맵 색 범례 — 맵 상단(코너 HUD·게이지와 겹치지 않음) */
@@ -208,3 +221,63 @@ canvas { touch-action: manipulation; display: block; }
 #mapLegend .leg.move i { background: rgba(74, 163, 255, 0.45); border: 1.5px solid #7ec8ff; }
 #mapLegend .leg.range-me i { background: rgba(255, 214, 74, 0.15); border: 1.5px solid #ffd24a; }
 #mapLegend .leg.range-foe i { background: rgba(255, 90, 80, 0.15); border: 1.5px dashed #ff6b5e; }
+
+
+/* 랜덤 룰렛 스톱 연출 */
+@keyframes roulette-pop {
+  0% { transform: scale(1); box-shadow: none; }
+  40% { transform: scale(1.08); box-shadow: 0 0 0 3px #ffd24a, 0 0 18px rgba(255, 210, 74, 0.55); }
+  100% { transform: scale(1); box-shadow: none; }
+}
+.tile.roulette-stop,
+.slot.roulette-stop {
+  animation: roulette-pop 0.45s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile.roulette-stop,
+  .slot.roulette-stop { animation: none; outline: 2px solid #ffd24a; }
+}
+
+/* 넓은 화면: 맵을 왼쪽 전체 높이에 두고 HUD/로그/커맨드를 오른쪽에 두어 타일을 키운다 */
+@media (min-width: 900px) {
+  #app {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    grid-template-rows: auto 1fr auto auto;
+    max-width: var(--app-max);
+  }
+  #boardWrap {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    min-height: 0;
+    height: 100%;
+  }
+  .details {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 10px 12px;
+    font-size: 12px;
+    border-top: none;
+    border-left: 1px solid var(--line);
+    align-content: start;
+  }
+  #log {
+    grid-column: 2;
+    grid-row: 2;
+    height: auto;
+    min-height: 120px;
+    padding: 8px 12px;
+    font-size: 13px;
+    border-left: 1px solid var(--line);
+  }
+  .cmds {
+    grid-column: 2;
+    grid-row: 3;
+    gap: 8px;
+    padding: 10px 12px;
+    border-left: 1px solid var(--line);
+  }
+  .cmds button { min-height: 48px; font-size: 15px; }
+  .corner { width: 26%; }
+  .pic { width: 68%; }
+}
